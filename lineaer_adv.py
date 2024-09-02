@@ -162,7 +162,7 @@ def compute_stiff_matrix2(Mass_matrix,grad_basis_val):
     return stiff_matrix
 
 if __name__ == "__main__":
-    jmax = 11
+    jmax = 21
     num_element = jmax-1
     approx_order = 3
     flux_number = 2
@@ -197,45 +197,48 @@ if __name__ == "__main__":
     Stiff2 = compute_stiff_matrix2(Mass,grad_basis_val_at_nodes)
     # print(basis_val_flux_points)
 
-    while (time < 10*dt):
+    while (time < 0.5):
+        coefs = [0.5,1.0]
+        u_old = u.copy()
+        for coef in coefs:
+            # Initialize u_flux at each time step
+            u_flux = np.zeros((num_element, flux_number))
+            
+            # Compute u_flux
+            for k in range(num_element):
+                for i in range(flux_number):
+                    for j in range(Np):
+                        u_flux[k, i] += u[k, j] * basis_val_flux_points[j, i]
+
+            # Compute flux coordinates
+            x_flux_coord = flux_pint_coor(x, flux_points)
+            
+            # Compute flux values
+            flux = compute_flux(u_flux, a,jmax)
+            
+            # Loop over elements to update residuals and solution
+            du = np.zeros_like(u)  # Initialize du to zero at each time step
+            res1 = np.zeros_like(u)
+            res2 = np.zeros_like(u)
+
+            # print(Mass)
+            for k in range(num_element):
+                # Initialize residuals for each element
+                
+                # Compute residuals
+                for i in range(Np):  # basis loop
+                    for j in range(Np):  # node loop
+                        res1[k,i] += -a * u[k, j] * Stiff[j, i]
+                    res2[k,i] = (flux[k + 1] * basis_val_flux_points[i, 1] - flux[k] * basis_val_flux_points[i, 0])
+
+                # Update du and u
+                
+                for i in range(Np):
+                    for j in range(Np):
+                        du[k, i] += -coef*dt / element_trans[k] * inverse_M[i, j] * (res1[k,j]+res2[k,j])
+                    u[k, i] = u_old[k,i]+ du[k, i]
         time += dt
-
-        # Initialize u_flux at each time step
-        u_flux = np.zeros((num_element, flux_number))
         
-        # Compute u_flux
-        for k in range(num_element):
-            for i in range(flux_number):
-                for j in range(Np):
-                    u_flux[k, i] += u[k, j] * basis_val_flux_points[j, i]
-
-        # Compute flux coordinates
-        x_flux_coord = flux_pint_coor(x, flux_points)
-        
-        # Compute flux values
-        flux = compute_flux(u_flux, a,jmax)
-        
-        # Loop over elements to update residuals and solution
-        du = np.zeros_like(u)  # Initialize du to zero at each time step
-        res1 = np.zeros_like(u)
-        res2 = np.zeros_like(u)
-
-        # print(Mass)
-        for k in range(num_element):
-            # Initialize residuals for each element
-            
-            # Compute residuals
-            for i in range(Np):  # basis loop
-                for j in range(Np):  # node loop
-                    res1[k,i] += -a * u[k, j] * Stiff[j, i]
-                res2[k,i] = (flux[k + 1] * basis_val_flux_points[i, 1] - flux[k] * basis_val_flux_points[i, 0])
-
-            # Update du and u
-            
-            for i in range(Np):
-                for j in range(Np):
-                    du[k, i] += -dt / element_trans[k] * inverse_M[i, j] * (res1[k,j]+res2[k,j])
-                u[k, i] += du[k, i]
         print("time is", time)
     
 
