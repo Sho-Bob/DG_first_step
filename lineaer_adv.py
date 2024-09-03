@@ -162,7 +162,7 @@ def compute_stiff_matrix2(Mass_matrix,grad_basis_val):
     return stiff_matrix
 
 if __name__ == "__main__":
-    jmax = 21
+    jmax = 5
     num_element = jmax-1
     approx_order = 3
     flux_number = 2
@@ -197,7 +197,7 @@ if __name__ == "__main__":
     Stiff2 = compute_stiff_matrix2(Mass,grad_basis_val_at_nodes)
     # print(basis_val_flux_points)
 
-    while (time < 0.5):
+    while (time < 1.0):
         coefs = [0.5,1.0]
         u_old = u.copy()
         for coef in coefs:
