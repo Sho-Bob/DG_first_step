@@ -140,16 +140,22 @@ def flux_pint_coor(x,flux_points):
             x_flux_coord[i,j] = 0.5*(x[i+1]+x[i]) + 0.5*(x[i+1]-x[i])*flux_points[j]
     return x_flux_coord
 
-def compute_flux(u_flux,a,jmax):
+def compute_flux(u_flux, jmax):
     '''Just an upwind flux'''
-
     nf = jmax
     flux = np.zeros(jmax)
-    for i in range(1,nf-1):
-        flux[i] = 0.5*(a*u_flux[i-1,1]+a*u_flux[i,0]) - 0.5*np.abs(a)*(u_flux[i,0]-u_flux[i-1,1])
-    #periodic boundary 
-    flux[0]  = 0.5*(a*u_flux[0,0]+a*u_flux[nf-2,1]) - 0.5*np.abs(a)*(u_flux[0,0]-u_flux[nf-2,1])
-    flux[nf-1] = 0.5*(a*u_flux[0,0]+a*u_flux[nf-2,1])- 0.5*np.abs(a)*(u_flux[0,0]-u_flux[nf-2,1])
+    
+    # Compute flux for internal points
+    for i in range(1, nf-1):
+        qm = 0.5 * (u_flux[i - 1,1] + np.abs(u_flux[i - 1,1]))
+        qp = 0.5 * (u_flux[i,0] - np.abs(u_flux[i,0]))
+        flux[i] = np.maximum(0.5 * qm**2, 0.5 * qp**2)
+    
+    # Periodic boundary
+    qm = 0.5 * (u_flux[0,0] + np.abs(u_flux[0,0]))
+    qp = 0.5 * (u_flux[nf - 2,1] - np.abs(u_flux[nf - 2,1])) 
+    flux[0] = np.maximum(0.5 * qm**2, 0.5 * qp**2)
+    flux[nf-1] = np.maximum(0.5 * qm**2, 0.5 * qp**2)
     return flux
 
 def compute_stiff_matrix2(Mass_matrix,grad_basis_val):
@@ -161,10 +167,16 @@ def compute_stiff_matrix2(Mass_matrix,grad_basis_val):
                 stiff_matrix[i,j] += Mass_matrix[i,k]*grad_basis_val[j,k]
     return stiff_matrix
 
+def compute_dt(dx,velo,CFL):
+    max_u = np.max(velo)
+    minimum_gsize = np.min(dx)
+    dt = CFL*minimum_gsize/max_u
+    return dt
+
 if __name__ == "__main__":
-    jmax = 3
+    jmax = 11
     num_element = jmax-1
-    approx_order = 4
+    approx_order = 3
     flux_number = 2
     time = 0.0
     Np = approx_order+1
@@ -172,6 +184,7 @@ if __name__ == "__main__":
     u_flux = np.zeros((num_element,flux_number))
     du = np.zeros_like(u)
     a = 1.0
+    CFL = 0.01
 
     gamma = 1.4
 
@@ -180,7 +193,7 @@ if __name__ == "__main__":
     dx = np.zeros(jmax-1)
     for i in range(jmax-1):
         dx[i] = x[i+1]-x[i]
-    dt = 0.02*np.min(dx)/a
+    # dt = 0.02*np.min(dx)/a
     element_trans = transform_mat(x)
 
     xq_points, xq_weights = gauss_legendre_points(Np)
@@ -197,9 +210,10 @@ if __name__ == "__main__":
     Stiff2 = compute_stiff_matrix2(Mass,grad_basis_val_at_nodes)
     # print(basis_val_flux_points)
 
-    while (time < 1.0):
+    while (time < 0.5):
         coefs = [0.5,1.0]
         u_old = u.copy()
+        dt = compute_dt(dx,u,CFL)
         for coef in coefs:
             # Initialize u_flux at each time step
             u_flux = np.zeros((num_element, flux_number))
@@ -214,7 +228,7 @@ if __name__ == "__main__":
             x_flux_coord = flux_pint_coor(x, flux_points)
             
             # Compute flux values
-            flux = compute_flux(u_flux, a,jmax)
+            flux = compute_flux(u_flux,jmax)
             
             # Loop over elements to update residuals and solution
             du = np.zeros_like(u)  # Initialize du to zero at each time step
@@ -228,7 +242,7 @@ if __name__ == "__main__":
                 # Compute residuals
                 for i in range(Np):  # basis loop
                     for j in range(Np):  # node loop
-                        res1[k,i] += -a * u[k, j] * Stiff[j, i]
+                        res1[k,i] += -0.5*u[k, j]**2 * Stiff[j, i]
                     res2[k,i] = (flux[k + 1] * basis_val_flux_points[i, 1] - flux[k] * basis_val_flux_points[i, 0])
 
                 # Update du and u
