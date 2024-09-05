@@ -162,7 +162,7 @@ def compute_stiff_matrix2(Mass_matrix,grad_basis_val):
     return stiff_matrix
 
 if __name__ == "__main__":
-    jmax = 3
+    jmax = 5
     num_element = jmax-1
     approx_order = 4
     flux_number = 2
@@ -250,8 +250,8 @@ if __name__ == "__main__":
     
 
     plt.figure(figsize=(8, 6))
-    plt.plot(x_coord, u_coord, marker='o', linestyle='-', color='b', label='Latest data')
     plt.plot(x_coord, u_ini_coord, marker='o', linestyle='-', color='r', label='initial')
+    plt.plot(x_coord, u_coord, marker='o', linestyle='-', color='b', label='Latest data')
     plt.xlabel('x_coord')
     plt.ylabel('u_coord')
     plt.title('Plot of x_coord vs u_coord')
