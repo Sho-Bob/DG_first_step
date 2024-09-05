@@ -298,7 +298,7 @@ def compute_primitive(u):
 if __name__ == "__main__":
     jmax = 101
     num_element = jmax-1
-    approx_order = 1
+    approx_order = 0
     flux_number = 2
     time = 0.0
     Np = approx_order+1
@@ -354,6 +354,9 @@ if __name__ == "__main__":
                         u_flux[k, i,:] += u[k, j,:] * basis_val_flux_points[j, i]
                         p_flux[k, i,:] += primitive_variable[k,j,:]*basis_val_flux_points[j, i]
             p_from_u_flux = compute_primitive(u_flux)
+
+            '''Can add some limniters here'''
+
             # Compute flux coordinates
             x_flux_coord = flux_pint_coor(x, flux_points)
             
