@@ -162,7 +162,7 @@ def compute_stiff_matrix2(Mass_matrix,grad_basis_val):
     return stiff_matrix
 
 if __name__ == "__main__":
-    jmax = 5
+    jmax = 129
     num_element = jmax-1
     approx_order = 4
     flux_number = 2
@@ -171,7 +171,9 @@ if __name__ == "__main__":
     u = np.zeros((num_element,Np))
     u_flux = np.zeros((num_element,flux_number))
     du = np.zeros_like(u)
+    error = np.zeros_like(u)
     a = 1.0
+    n= 0
 
     gamma = 1.4
 
@@ -180,7 +182,7 @@ if __name__ == "__main__":
     dx = np.zeros(jmax-1)
     for i in range(jmax-1):
         dx[i] = x[i+1]-x[i]
-    dt = 0.02*np.min(dx)/a
+    dt = 0.01*np.min(dx)/a
     element_trans = transform_mat(x)
 
     xq_points, xq_weights = gauss_legendre_points(Np)
@@ -199,8 +201,10 @@ if __name__ == "__main__":
 
     while (time < 1.0):
         coefs = [0.5,1.0]
+        n+=1
         u_old = u.copy()
         for coef in coefs:
+            
             # Initialize u_flux at each time step
             u_flux = np.zeros((num_element, flux_number))
             
@@ -237,9 +241,16 @@ if __name__ == "__main__":
                     for j in range(Np):
                         du[k, i] += -coef*dt / element_trans[k] * inverse_M[i, j] * (res1[k,j]+res2[k,j])
                     u[k, i] = u_old[k,i]+ du[k, i]
-        time += dt
-        
+        time = dt*n
+        if(time == 1.0):
+            error = (u_ini-u)**2
+            L1norm = 0.0
+            for i in range(error.shape[0]):
+                for j in range(error.shape[1]):
+                    L1norm += error[i,j]*xq_weights[j]
+            print("Element nbumber, L1norm:", num_element, L1norm)
         print("time is", time)
+
     
 
     x_coord = x_element.flatten()
