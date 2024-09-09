@@ -259,7 +259,38 @@ def Lax(u_flux,p_flux,p_from_u, jmax,flag_p,dt,dx):
         fR = [rhoR*uR,rhoR*uR**2+pR, (eR+pR)*uR]
         fL = np.array(fL)
         fR = np.array(fR)
-        flux[i,:] = 0.5*(fL[:]+fR[:] - dt/dx[i]*(u_flux[i-1,1,:]+u_flux[i,0,:]))
+        flux[i,:] = 0.5*(fL[:]+fR[:] - dt/dx[i]*(u_flux[i,0,:]-u_flux[i-1,1,:]))
+    flux[0,:] = [u_flux[0,0,1],(u_flux[0,0,1]**2/u_flux[0,0,0]+p_from_u[0,0,2]),(u_flux[0,0,2]+p_from_u[0,0,2])*p_from_u[0,0,1]]
+    flux[nf-1,:] = [u_flux[nf-2,1,1],(u_flux[nf-2,1,1]**2/u_flux[nf-2,1,0]+p_from_u[nf-2,1,2]),(u_flux[nf-2,1,2]+p_from_u[nf-2,1,2])*p_from_u[nf-2,1,1]]
+    return flux
+
+def Rusanov(u_flux,p_flux,p_from_u, jmax):
+    '''upwind flux'''
+    nf = jmax
+    flux = np.zeros((jmax,3))
+    gamma = 1.4
+    sound = np.zeros((nf-1,2))
+    # Compute flux for internal points
+    for i in range(nf-1):
+        sound[i,0] = np.sqrt(gamma*p_from_u[i,0,2]/p_from_u[i,0,0])
+        sound[i,1] = np.sqrt(gamma*p_from_u[i,1,2]/p_from_u[i,1,0])
+    for i in range(1, nf-1):
+        '''Extract L and R'''
+        aL = sound[i-1,1]
+        aR = sound[i,0]
+        eL = u_flux[i-1,1,2]
+        eR = u_flux[i  ,0,2]
+        rhoL = u_flux[i-1,1,0]
+        rhoR = u_flux[i,0,0]
+        uL = p_from_u[i-1,1,1]
+        uR = p_from_u[i,  0,1]
+        pL = p_from_u[i-1,1,2]
+        pR = p_from_u[i,  0,2]
+        fL = [rhoL*uL,rhoL*uL**2+pL, (eL+pL)*uL]
+        fR = [rhoR*uR,rhoR*uR**2+pR, (eR+pR)*uR]
+        fL = np.array(fL)
+        fR = np.array(fR)
+        flux[i,:] = 0.5*(fL[:]+fR[:] - 0.5*max((np.abs(u_flux[i-1,1,1]/u_flux[i-1,1,0])+sound[i,0]),(np.abs(u_flux[i,0,1]/u_flux[i,0,0])+sound[i,1]))*(u_flux[i,0,:]-u_flux[i-1,1,:]))
     flux[0,:] = [u_flux[0,0,1],(u_flux[0,0,1]**2/u_flux[0,0,0]+p_from_u[0,0,2]),(u_flux[0,0,2]+p_from_u[0,0,2])*p_from_u[0,0,1]]
     flux[nf-1,:] = [u_flux[nf-2,1,1],(u_flux[nf-2,1,1]**2/u_flux[nf-2,1,0]+p_from_u[nf-2,1,2]),(u_flux[nf-2,1,2]+p_from_u[nf-2,1,2])*p_from_u[nf-2,1,1]]
     return flux
@@ -312,6 +343,7 @@ def PP_limiter(u_flux1,u1,p_from_u_flux,primitive_variable,cons_v_cell_av,prim_v
     RES_TOL = 1.e-13
     unfiltered = u1.copy()
     unfiltered_f = u_flux1.copy()
+    theta = np.zeros(u_shape[0])
     min_density1 = 0.0
     min_density2 = 0.0
     min_density = 0.0
@@ -326,11 +358,11 @@ def PP_limiter(u_flux1,u1,p_from_u_flux,primitive_variable,cons_v_cell_av,prim_v
         theta2 = np.abs((rho_bar-RES_TOL)/(rho_bar-p_from_u_flux[i,:,0]+RES_TOL))
         theta3 = trunc(np.minimum(1.0, np.min(theta1)))
         theta4 = trunc(np.minimum(1.0, np.min(theta2)))
-        theta = min(theta3,theta4)
+        theta[i] = min(theta3,theta4)
         for j in range(u_shape[1]):
-            u1[i,j,0] = theta*u1[i,j,0] + (1.0-theta)*cons_v_cell_av[i,0]
+            u1[i,j,0] = theta[i]*u1[i,j,0] + (1.0-theta[i])*cons_v_cell_av[i,0]
         for j in range(flux_shape[1]):
-            u_flux1[i,j,0] = theta*u_flux1[i,j,0] + (1.0-theta)*cons_v_cell_av[i,0]
+            u_flux1[i,j,0] = theta[i]*u_flux1[i,j,0] + (1.0-theta[i])*cons_v_cell_av[i,0]
     primitive_variable = compute_primitive(u1)
     p_from_u_flux = compute_primitive(u_flux1)
 
@@ -343,15 +375,15 @@ def PP_limiter(u_flux1,u1,p_from_u_flux,primitive_variable,cons_v_cell_av,prim_v
         theta2 = np.abs((p_bar-RES_TOL)/(p_bar-p_from_u_flux[i,:,2]+RES_TOL))
         theta3 = trunc(np.minimum(1.0, np.min(theta1)))
         theta4 = trunc(np.minimum(1.0, np.min(theta2)))
-        theta = min(theta3,theta4)
+        theta[i] = min(theta3,theta4)
         for j in range(u_shape[1]):
-            u1[i,j,:] = theta*unfiltered[i,j,:] + (1.0-theta)*cons_v_cell_av[i,:]
+            u1[i,j,:] = theta[i]*unfiltered[i,j,:] + (1.0-theta[i])*cons_v_cell_av[i,:]
         for j in range(flux_shape[1]):
-            u_flux1[i,j,:] = theta*unfiltered_f[i,j,:] + (1.0-theta)*cons_v_cell_av[i,:]
+            u_flux1[i,j,:] = theta[i]*unfiltered_f[i,j,:] + (1.0-theta[i])*cons_v_cell_av[i,:]
     # primitive_variable = compute_primitive(u)
     # p_from_u_flux = compute_primitive(u_flux)
 
-    return u_flux1, u1
+    return u_flux1, u1, theta
 
 def compute_primitive(u):
     u_shape = u.shape
@@ -432,7 +464,7 @@ if __name__ == "__main__":
         cons_v_cell_average = 0.0
         prim_v_cell_average = 0.0
         cons_v_cell_average, prim_v_cell_average = compute_cell_average(u,primitive_variable,xq_weights,element_trans,dx)
-        u_old = u.copy()
+        # u_old = u.copy()
         # Initialize u_flux at each time step
         primitive_variable = compute_primitive(u)
         u_flux = np.zeros((num_element, flux_number,3))
@@ -447,14 +479,15 @@ if __name__ == "__main__":
         p_from_u_flux = compute_primitive(u_flux)
 
         '''Can add some limniters here'''
-        u_flux, u = PP_limiter(u_flux,u,p_from_u_flux,primitive_variable,cons_v_cell_average,prim_v_cell_average)
+        u_flux, u, theta = PP_limiter(u_flux,u,p_from_u_flux,primitive_variable,cons_v_cell_average,prim_v_cell_average)
         primitive_variable = compute_primitive(u)
         p_from_u_flux = compute_primitive(u_flux)
         # Compute flux coordinates
         x_flux_coord = flux_pint_coor(x, flux_points)
         
         # Compute flux values
-        flux = HLLC(u_flux,p_flux,p_from_u_flux,jmax,flag_p)
+        # flux = HLLC(u_flux,p_flux,p_from_u_flux,jmax,flag_p)
+        flux = Rusanov(u_flux,p_flux,p_from_u_flux, jmax)
         # flux = Lax(u_flux,p_flux,p_from_u_flux,jmax,flag_p,dt,dx)
         
         # Loop over elements to update residuals and solution
@@ -483,6 +516,7 @@ if __name__ == "__main__":
                 u[k, i,:] = un[k,i,:]+ du[k, i,:]
 
         u_old = u
+        # primitive_variable = np.zeros_like(u) # [rho, u, p]
         primitive_variable = compute_primitive(u)
         u_flux = np.zeros((num_element, flux_number,3))
         p_flux = np.zeros((num_element, flux_number,3))
@@ -497,14 +531,15 @@ if __name__ == "__main__":
         p_from_u_flux = compute_primitive(u_flux)
 
         '''Can add some limniters here'''
-        u_flux, u = PP_limiter(u_flux,u,p_from_u_flux,primitive_variable,cons_v_cell_average,prim_v_cell_average)
+        u_flux, u, theta = PP_limiter(u_flux,u,p_from_u_flux,primitive_variable,cons_v_cell_average,prim_v_cell_average)
         primitive_variable = compute_primitive(u)
         p_from_u_flux = compute_primitive(u_flux)
         # Compute flux coordinates
         x_flux_coord = flux_pint_coor(x, flux_points)
         
         # Compute flux values
-        flux = HLLC(u_flux,p_flux,p_from_u_flux,jmax,flag_p)
+        # flux = HLLC(u_flux,p_flux,p_from_u_flux,jmax,flag_p)
+        flux = Rusanov(u_flux,p_flux,p_from_u_flux, jmax)
         # flux = Lax(u_flux,p_flux,p_from_u_flux,jmax,flag_p,dt,dx)
         
         # Loop over elements to update residuals and solution
@@ -534,6 +569,7 @@ if __name__ == "__main__":
             # u1 = u.copy()
             # u_flux1 = u_flux.copy()
         # u_old = u.copy()
+        # primitive_variable = np.zeros_like(u) # [rho, u, p]
         primitive_variable = compute_primitive(u)
         u_flux = np.zeros((num_element, flux_number,3))
         p_flux = np.zeros((num_element, flux_number,3))
@@ -548,14 +584,15 @@ if __name__ == "__main__":
         p_from_u_flux = compute_primitive(u_flux)
 
         '''Can add some limniters here'''
-        u_flux, u = PP_limiter(u_flux,u,p_from_u_flux,primitive_variable,cons_v_cell_average,prim_v_cell_average)
+        u_flux, u, theta = PP_limiter(u_flux,u,p_from_u_flux,primitive_variable,cons_v_cell_average,prim_v_cell_average)
         primitive_variable = compute_primitive(u)
         p_from_u_flux = compute_primitive(u_flux)
         # Compute flux coordinates
         x_flux_coord = flux_pint_coor(x, flux_points)
         
         # Compute flux values
-        flux = HLLC(u_flux,p_flux,p_from_u_flux,jmax,flag_p)
+        # flux = HLLC(u_flux,p_flux,p_from_u_flux,jmax,flag_p)
+        flux = Rusanov(u_flux,p_flux,p_from_u_flux, jmax)
         # flux = Lax(u_flux,p_flux,p_from_u_flux,jmax,flag_p,dt,dx)
         
         # Loop over elements to update residuals and solution
@@ -606,9 +643,10 @@ if __name__ == "__main__":
     
 
     plt.figure(figsize=(8, 6))
-    plt.plot(x2, density, marker='o', color='b', label='Latest data',markersize=4)
-    plt.plot(x2, velocity, marker='o', color='r', label='Latest data',markersize=4)
-    plt.plot(x2, pressure, marker='o', color='g', label='Latest data',markersize=4)
+    plt.plot(x2, density, marker='o', color='b', label='Density',markersize=4)
+    plt.plot(x2, velocity, marker='o', color='r', label='Velocity',markersize=4)
+    plt.plot(x2, pressure, marker='o', color='g', label='Pressure',markersize=4)
+    # plt.plot(x2, theta, marker='o', color='y', label='Theta',markersize=4)
     # plt.plot(x_coord, u_coord, marker='o', color='b', label='Density',markersize=4)
     # plt.plot(x_coord, velo_coord, marker='o', color='r', label='Velocity',markersize=4)
     # plt.plot(x_coord, p_coord, marker='o', color='g', label='Pressure',markersize=4)
