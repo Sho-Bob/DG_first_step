@@ -162,7 +162,7 @@ def compute_stiff_matrix2(Mass_matrix,grad_basis_val):
     return stiff_matrix
 
 if __name__ == "__main__":
-    jmax = 129
+    jmax = 17
     num_element = jmax-1
     approx_order = 4
     flux_number = 2
@@ -182,7 +182,7 @@ if __name__ == "__main__":
     dx = np.zeros(jmax-1)
     for i in range(jmax-1):
         dx[i] = x[i+1]-x[i]
-    dt = 0.01*np.min(dx)/a
+    dt = 0.0001*np.min(dx)/a
     element_trans = transform_mat(x)
 
     xq_points, xq_weights = gauss_legendre_points(Np)
@@ -247,8 +247,8 @@ if __name__ == "__main__":
             L1norm = 0.0
             for i in range(error.shape[0]):
                 for j in range(error.shape[1]):
-                    L1norm += error[i,j]*xq_weights[j]
-            print("Element nbumber, L1norm:", num_element, L1norm)
+                    L1norm += element_trans[i]*error[i,j]*xq_weights[j]
+            print("Element nbumber, L1norm:", num_element, np.sqrt(L1norm))
         print("time is", time)
 
     
