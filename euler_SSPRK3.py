@@ -145,6 +145,33 @@ def init_variable_sod(u,x,xq):
                 u[i,j,2] = pR/(gamma-1)+0.5*rhoR*uR**2
     return u,x_elem
 
+
+def init_variable_contact_d(u,x,xq):
+    u_shape = u.shape
+    x_elem = np.zeros((u.shape[0],u.shape[1]))
+    gamma = 1.4
+    rhoL = 1.0
+    pL = 1.0
+    uL = 1.0
+    rhoR= 0.125
+    pR=1.0
+    uR=1.0
+    for i in range(u_shape[0]): # element loop
+        for j in range(u_shape[1]): # np loop
+            x_elem[i,j] = 0.5*(x[i+1]+x[i]) + 0.5*(x[i+1]-x[i])*xq[j]
+            u[i,j,0] = 2.0+np.sin(2.0*x_elem[i,j]*np.pi)
+            u[i,j,1] = u[i,j,0]
+            u[i,j,2] = (pL)/(gamma-1)+0.5*u[i,j,1]**2/u[i,j,0]
+            # if(x_elem[i,j]<0.75 and x_elem[i,j]>0.25):
+            #     u[i,j,0] = rhoL
+            #     u[i,j,1] = rhoL*uL
+            #     u[i,j,2] = pL/(gamma-1)+0.5*rhoL*uL**2
+            # else:
+            #     u[i,j,0] = rhoR
+            #     u[i,j,1] = rhoR*uR
+            #     u[i,j,2] = pR/(gamma-1)+0.5*rhoR*uR**2
+    return u,x_elem
+
 def flux_pint_coor(x,flux_points):
     Ne = x.shape[0]-1
     nf = len(flux_points)
@@ -291,10 +318,26 @@ def Rusanov(u_flux,p_flux,p_from_u, jmax):
         fL = np.array(fL)
         fR = np.array(fR)
         flux[i,:] = 0.5*(fL[:]+fR[:] - 0.5*max((np.abs(u_flux[i-1,1,1]/u_flux[i-1,1,0])+sound[i,0]),(np.abs(u_flux[i,0,1]/u_flux[i,0,0])+sound[i,1]))*(u_flux[i,0,:]-u_flux[i-1,1,:]))
-    flux[0,:] = [u_flux[0,0,1],(u_flux[0,0,1]**2/u_flux[0,0,0]+p_from_u[0,0,2]),(u_flux[0,0,2]+p_from_u[0,0,2])*p_from_u[0,0,1]]
-    flux[nf-1,:] = [u_flux[nf-2,1,1],(u_flux[nf-2,1,1]**2/u_flux[nf-2,1,0]+p_from_u[nf-2,1,2]),(u_flux[nf-2,1,2]+p_from_u[nf-2,1,2])*p_from_u[nf-2,1,1]]
+    # flux[0,:] = [u_flux[0,0,1],(u_flux[0,0,1]**2/u_flux[0,0,0]+p_from_u[0,0,2]),(u_flux[0,0,2]+p_from_u[0,0,2])*p_from_u[0,0,1]]
+    # flux[nf-1,:] = [u_flux[nf-2,1,1],(u_flux[nf-2,1,1]**2/u_flux[nf-2,1,0]+p_from_u[nf-2,1,2]),(u_flux[nf-2,1,2]+p_from_u[nf-2,1,2])*p_from_u[nf-2,1,1]]
+    '''Periodic boundary condition'''
+    aL = sound[nf-2,1]
+    aR = sound[0,0]
+    eL = u_flux[nf-2,1,2]
+    eR = u_flux[0  ,0,2]
+    rhoL = u_flux[nf-2,1,0]
+    rhoR = u_flux[0,0,0]
+    uL = p_from_u[nf-2,1,1]
+    uR = p_from_u[0,  0,1]
+    pL = p_from_u[nf-2,1,2]
+    pR = p_from_u[0,  0,2]
+    fL = [rhoL*uL,rhoL*uL**2+pL, (eL+pL)*uL]
+    fR = [rhoR*uR,rhoR*uR**2+pR, (eR+pR)*uR]
+    fL = np.array(fL)
+    fR = np.array(fR)
+    flux[0,:] = 0.5*(fL[:]+fR[:] - 0.5*max((np.abs(u_flux[nf-2,1,1]/u_flux[nf-2,1,0])+sound[nf-2,0]),(np.abs(u_flux[0,0,1]/u_flux[0,0,0])+sound[0,1]))*(u_flux[0,0,:]-u_flux[nf-2,1,:]))
+    flux[nf-1,:] = 0.5*(fL[:]+fR[:] - 0.5*max((np.abs(u_flux[nf-2,1,1]/u_flux[nf-2,1,0])+sound[nf-2,0]),(np.abs(u_flux[0,0,1]/u_flux[0,0,0])+sound[0,1]))*(u_flux[0,0,:]-u_flux[nf-2,1,:]))
     return flux
-
 
 def compute_stiff_matrix2(Mass_matrix,grad_basis_val):
     stiff_matrix = np.zeros_like(Mass_matrix)
@@ -409,9 +452,9 @@ def compute_cell_average(u,primitive_variable,xq_weights,trans_matrix,dx):
     return cons_v_cell_average, prim_v_cell_average 
 
 if __name__ == "__main__":
-    jmax = 101
+    jmax = 3
     num_element = jmax-1
-    approx_order = 2
+    approx_order = 1
     flux_number = 2
     time = 0.0
     Np = approx_order+1
@@ -421,7 +464,7 @@ if __name__ == "__main__":
     u_flux = np.zeros((num_element,flux_number,3))
     du = np.zeros_like(u)
     a = 1.0
-    CFL = 0.1
+    CFL = 0.001
     gamma = 1.4
     flag_p = False
     x_min, x_max = 0.0,1.0
@@ -435,7 +478,8 @@ if __name__ == "__main__":
     xq_points, xq_weights = gauss_legendre_points(Np)
     print(xq_points)
 
-    u,x_element = init_variable_sod(u,x,xq_points)
+    # u,x_element = init_variable_sod(u,x,xq_points)
+    u,x_element = init_variable_contact_d(u,x,xq_points)
     primitive_variable = np.zeros_like(u) # [rho, u, p]
     primitive_variable = compute_primitive(u)
     cons_v_cell_average, prim_v_cell_average = compute_cell_average(u,primitive_variable,xq_weights,element_trans,dx)
@@ -479,13 +523,14 @@ if __name__ == "__main__":
         p_from_u_flux = compute_primitive(u_flux)
 
         '''Can add some limniters here'''
-        u_flux, u, theta = PP_limiter(u_flux,u,p_from_u_flux,primitive_variable,cons_v_cell_average,prim_v_cell_average)
-        primitive_variable = compute_primitive(u)
-        p_from_u_flux = compute_primitive(u_flux)
+        # u_flux, u, theta = PP_limiter(u_flux,u,p_from_u_flux,primitive_variable,cons_v_cell_average,prim_v_cell_average)
+        # primitive_variable = compute_primitive(u)
+        # p_from_u_flux = compute_primitive(u_flux)
         # Compute flux coordinates
         x_flux_coord = flux_pint_coor(x, flux_points)
         
         # Compute flux values
+        # flux = Central(u_flux,p_flux,p_from_u_flux, jmax)
         # flux = HLLC(u_flux,p_flux,p_from_u_flux,jmax,flag_p)
         flux = Rusanov(u_flux,p_flux,p_from_u_flux, jmax)
         # flux = Lax(u_flux,p_flux,p_from_u_flux,jmax,flag_p,dt,dx)
@@ -531,13 +576,14 @@ if __name__ == "__main__":
         p_from_u_flux = compute_primitive(u_flux)
 
         '''Can add some limniters here'''
-        u_flux, u, theta = PP_limiter(u_flux,u,p_from_u_flux,primitive_variable,cons_v_cell_average,prim_v_cell_average)
-        primitive_variable = compute_primitive(u)
-        p_from_u_flux = compute_primitive(u_flux)
+        # u_flux, u, theta = PP_limiter(u_flux,u,p_from_u_flux,primitive_variable,cons_v_cell_average,prim_v_cell_average)
+        # primitive_variable = compute_primitive(u)
+        # p_from_u_flux = compute_primitive(u_flux)
         # Compute flux coordinates
         x_flux_coord = flux_pint_coor(x, flux_points)
         
         # Compute flux values
+        # flux = Central(u_flux,p_flux,p_from_u_flux, jmax)
         # flux = HLLC(u_flux,p_flux,p_from_u_flux,jmax,flag_p)
         flux = Rusanov(u_flux,p_flux,p_from_u_flux, jmax)
         # flux = Lax(u_flux,p_flux,p_from_u_flux,jmax,flag_p,dt,dx)
@@ -584,13 +630,14 @@ if __name__ == "__main__":
         p_from_u_flux = compute_primitive(u_flux)
 
         '''Can add some limniters here'''
-        u_flux, u, theta = PP_limiter(u_flux,u,p_from_u_flux,primitive_variable,cons_v_cell_average,prim_v_cell_average)
-        primitive_variable = compute_primitive(u)
-        p_from_u_flux = compute_primitive(u_flux)
+        # u_flux, u, theta = PP_limiter(u_flux,u,p_from_u_flux,primitive_variable,cons_v_cell_average,prim_v_cell_average)
+        # primitive_variable = compute_primitive(u)
+        # p_from_u_flux = compute_primitive(u_flux)
         # Compute flux coordinates
         x_flux_coord = flux_pint_coor(x, flux_points)
         
         # Compute flux values
+        # flux = Central(u_flux,p_flux,p_from_u_flux, jmax)
         # flux = HLLC(u_flux,p_flux,p_from_u_flux,jmax,flag_p)
         flux = Rusanov(u_flux,p_flux,p_from_u_flux, jmax)
         # flux = Lax(u_flux,p_flux,p_from_u_flux,jmax,flag_p,dt,dx)
@@ -623,6 +670,15 @@ if __name__ == "__main__":
         time += dt
         # print(time)
     
+    '''Compute L2 norm'''
+    exact = np.zeros_like(x_element)
+    exact = 2.0+np.sin(2.0*np.pi*(x_element-1.0*time))
+    error = (exact-u[:,:,0])**2
+    L2norm = 0.0
+    for i in range(error.shape[0]):
+        for j in range(error.shape[1]):
+            L2norm += element_trans[i]*error[i,j]*xq_weights[j]
+    print("Element nbumber, L1norm:", num_element, np.sqrt(L2norm))
 
     # print(x_element.shape)
     # print(u.shape)
@@ -634,6 +690,7 @@ if __name__ == "__main__":
     x_coord = x_element.flatten()
     u_coord = u[:,:,0].flatten()
     p_coord = primitive_variable[:,:,2].flatten()
+    exact_s = exact.flatten()
     velo_coord = primitive_variable[:,:,1].flatten()
 
     # x_coord = x_flux_coord.flatten()
@@ -643,13 +700,14 @@ if __name__ == "__main__":
     
 
     plt.figure(figsize=(8, 6))
-    plt.plot(x2, density, marker='o', color='b', label='Density',markersize=4)
-    plt.plot(x2, velocity, marker='o', color='r', label='Velocity',markersize=4)
-    plt.plot(x2, pressure, marker='o', color='g', label='Pressure',markersize=4)
+    # plt.plot(x2, density, marker='o', color='b', label='Density',markersize=4)
+    # plt.plot(x2, velocity, marker='o', color='r', label='Velocity',markersize=4)
+    # plt.plot(x2, pressure, marker='o', color='g', label='Pressure',markersize=4)
     # plt.plot(x2, theta, marker='o', color='y', label='Theta',markersize=4)
-    # plt.plot(x_coord, u_coord, marker='o', color='b', label='Density',markersize=4)
-    # plt.plot(x_coord, velo_coord, marker='o', color='r', label='Velocity',markersize=4)
-    # plt.plot(x_coord, p_coord, marker='o', color='g', label='Pressure',markersize=4)
+    plt.plot(x_coord, u_coord, marker='o', color='b', label='Density',markersize=4)
+    plt.plot(x_coord, exact_s, marker='o', color='b', label='Density_exact',markersize=4)
+    plt.plot(x_coord, velo_coord, marker='o', color='r', label='Velocity',markersize=4)
+    plt.plot(x_coord, p_coord, marker='o', color='g', label='Pressure',markersize=4)
     plt.xlabel('x')
     # plt.ylabel('D')
     # plt.title('Plot of x_coord vs u_coord')
