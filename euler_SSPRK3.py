@@ -173,6 +173,7 @@ def init_variable_contact_d(u,x,xq):
     return u,x_elem
 
 def flux_pint_coor(x,flux_points):
+    """To compute the physical coordinates of quad points"""
     Ne = x.shape[0]-1
     nf = len(flux_points)
     x_flux_coord = np.zeros((Ne,nf))
