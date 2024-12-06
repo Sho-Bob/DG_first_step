@@ -382,6 +382,7 @@ def trunc(a, decimals=8):
         return np.trunc(a*10**decimals)/(10**decimals)
 
 def PP_limiter(u_flux1,u1,p_from_u_flux,primitive_variable,cons_v_cell_av,prim_v_cell_av):
+    """QUAIL does not implement PP limiter correctly"""
     flux_shape = u_flux1.shape
     u_shape = u1.shape
     RES_TOL = 1.e-13
@@ -430,6 +431,7 @@ def PP_limiter(u_flux1,u1,p_from_u_flux,primitive_variable,cons_v_cell_av,prim_v
     return u_flux1, u1, theta
 
 def compute_primitive(u):
+    """Compute primitives from conservative variables"""
     u_shape = u.shape
     primitive_variable = np.zeros_like(u)
     gamma =1.4
@@ -494,6 +496,7 @@ if __name__ == "__main__":
     grad_basis_val_at_nodes = init_lag_poly_grad_all(xq_points,xq_points)
     Stiff2 = compute_stiff_matrix2(Mass,grad_basis_val_at_nodes)
     dt = compute_dt(dx,primitive_variable,CFL)
+    """Vectors to compute the interpolated conserv primitive variables"""
     u_flux = np.zeros((num_element, flux_number,3))
     p_flux = np.zeros((num_element, flux_number,3))
     p_from_u_flux = np.zeros((num_element, flux_number,3))
