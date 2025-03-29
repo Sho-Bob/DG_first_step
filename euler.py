@@ -4,6 +4,8 @@ import matplotlib.animation as animation
 import sys
 from gauss_lobatto import gauss_lobatto_points
 from gauss_legendre import gauss_legendre_points
+import interpolation
+import RK2nd as RK2
 
 # Compute dx/dr 
 def transform_mat(x):
@@ -191,7 +193,7 @@ def HLLC(u_flux,p_flux,p_from_u, jmax,flag_p):
         aL_star = np.sqrt(gamma*p_star/rhoL_star)
         aR_star = np.sqrt(gamma*p_star/rhoR_star)
 
-        '''gybrid wave speed estimates/ linearised wave speed estimates'''
+        '''hybrid wave speed estimates/ linearised wave speed estimates'''
         hL = p_star/pL
         hR = p_star/pR
         # if(hL<=1.0):
@@ -259,7 +261,8 @@ def Lax(u_flux,p_flux,p_from_u, jmax,flag_p,dt,dx):
         fR = [rhoR*uR,rhoR*uR**2+pR, (eR+pR)*uR]
         fL = np.array(fL)
         fR = np.array(fR)
-        flux[i,:] = 0.5*(fL[:]+fR[:] - dt/dx[i]*(u_flux[i-1,1,:]+u_flux[i,0,:]))
+        # flux[i,:] = 0.5*(fL[:]+fR[:] - dt/dx[i]*(u_flux[i,0,:]-u_flux[i-1,1,:]))
+        flux[i,:] = 0.5*(fL[:]+fR[:] - max(aL+uL,aR+uR)*(u_flux[i,0,:]-u_flux[i-1,1,:]))
     flux[0,:] = [u_flux[0,0,1],(u_flux[0,0,1]**2/u_flux[0,0,0]+p_from_u[0,0,2]),(u_flux[0,0,2]+p_from_u[0,0,2])*p_from_u[0,0,1]]
     flux[nf-1,:] = [u_flux[nf-2,1,1],(u_flux[nf-2,1,1]**2/u_flux[nf-2,1,0]+p_from_u[nf-2,1,2]),(u_flux[nf-2,1,2]+p_from_u[nf-2,1,2])*p_from_u[nf-2,1,1]]
     return flux
@@ -393,11 +396,13 @@ def compute_cell_average(u,primitive_variable,xq_weights,trans_matrix,dx):
     return cons_v_cell_average, prim_v_cell_average 
 
 if __name__ == "__main__":
-    jmax = 101
+    jmax = 201
     num_element = jmax-1
     approx_order = 2
     flux_number = 2
     time = 0.0
+    flux_type = 'HLLC'
+    # number of nodes in each element: At quad points
     Np = approx_order+1
     u = np.zeros((num_element,Np,3))
     cons_v_cell_average = np.zeros((num_element))
@@ -415,16 +420,13 @@ if __name__ == "__main__":
         dx[i] = x[i+1]-x[i]
     # dt = 0.02*np.min(dx)/a
     element_trans = transform_mat(x)
-
     xq_points, xq_weights = gauss_legendre_points(Np)
-    print(xq_points)
-
     u,x_element = init_variable_sod(u,x,xq_points)
     primitive_variable = np.zeros_like(u) # [rho, u, p]
     primitive_variable = compute_primitive(u)
     cons_v_cell_average, prim_v_cell_average = compute_cell_average(u,primitive_variable,xq_weights,element_trans,dx)
     u_ini = u.copy()
-    # print(x_element)
+
     flux_points = [-1.0,1.0]
     Mass = compute_mass_matrix(xq_points,xq_weights)
     Stiff = compute_stiff_matrix(xq_points,xq_weights)
@@ -433,8 +435,8 @@ if __name__ == "__main__":
     grad_basis_val_at_nodes = init_lag_poly_grad_all(xq_points,xq_points)
     Stiff2 = compute_stiff_matrix2(Mass,grad_basis_val_at_nodes)
     dt = compute_dt(dx,primitive_variable,CFL)
-    print("Initial done")
-    # print(basis_val_flux_points)
+    print("Precompute martices and weights are done")
+
 
     while (time < 0.12):
         coefs = [0.5,1.0]
@@ -449,11 +451,7 @@ if __name__ == "__main__":
         p_from_u_flux = np.zeros((num_element, flux_number,3))
         
         # Compute u_flux
-        for k in range(num_element):
-            for i in range(flux_number):
-                for j in range(Np):
-                    u_flux[k, i,:] += u[k, j,:] * basis_val_flux_points[j, i]
-                    p_flux[k, i,:] += primitive_variable[k,j,:]*basis_val_flux_points[j, i]
+        u_flux, p_flux = interpolation.compute_flux_point_values(u, primitive_variable, basis_val_flux_points, num_element, flux_number, Np)
         p_from_u_flux = compute_primitive(u_flux)
 
         '''Can add some limniters here'''
@@ -464,33 +462,13 @@ if __name__ == "__main__":
         x_flux_coord = flux_pint_coor(x, flux_points)
         
         # Compute flux values
-        flux = HLLC(u_flux,p_flux,p_from_u_flux,jmax,flag_p)
-        # flux = Lax(u_flux,p_flux,p_from_u_flux,jmax,flag_p,dt,dx)
-        
-        # Loop over elements to update residuals and solution
-        du = np.zeros_like(u)  # Initialize du to zero at each time step
-        res1 = np.zeros_like(u)
-        res2 = np.zeros_like(u)
+        if(flux_type == 'Rusanov'):
+            flux = Lax(u_flux,p_flux,p_from_u_flux,jmax,flag_p,dt,dx)
+        elif(flux_type == 'HLLC'):
+            flux = HLLC(u_flux,p_flux,p_from_u_flux,jmax,flag_p)
 
-        '''Time integration RK2nd'''
-        # print(Mass)
-        for k in range(num_element):
-            # Initialize residuals for each element
-            
-            # Compute residuals
-            for i in range(Np):  # basis loop
-                for j in range(Np):  # node loop
-                    res1[k,i,0] += - u[k,j,1]* Stiff[j, i]
-                    res1[k,i,1] += - (u[k,j,1]**2/u[k,j,0]+ primitive_variable[k,j,2])*Stiff[j,i]
-                    res1[k,i,2] += - (u[k,j,2]+primitive_variable[k,j,2])*primitive_variable[k,j,1]*Stiff[j,i]
-                res2[k,i,:] = (flux[k + 1,:] * basis_val_flux_points[i, 1] - flux[k,:] * basis_val_flux_points[i, 0])
-
-            # Update du and u
-            
-            for i in range(Np):
-                for j in range(Np):
-                    du[k, i,:] += -dt / element_trans[k] * inverse_M[i, j] * (res1[k,j,:]+res2[k,j,:])
-                u[k, i,:] = un[k,i,:]+ du[k, i,:]
+        '''Time integration RK2nd 1st step'''
+        u = RK2.RK2nd_1st(u,un,primitive_variable,Stiff,flux,basis_val_flux_points,dt,inverse_M,element_trans,num_element,Np)
 
         u_old = u.copy()
         primitive_variable = compute_primitive(u)
@@ -499,11 +477,7 @@ if __name__ == "__main__":
         p_from_u_flux = np.zeros((num_element, flux_number,3))
         
         # Compute u_flux
-        for k in range(num_element):
-            for i in range(flux_number):
-                for j in range(Np):
-                    u_flux[k, i,:] += u[k, j,:] * basis_val_flux_points[j, i]
-                    p_flux[k, i,:] += primitive_variable[k,j,:]*basis_val_flux_points[j, i]
+        u_flux, p_flux = interpolation.compute_flux_point_values(u, primitive_variable, basis_val_flux_points, num_element, flux_number, Np)
         p_from_u_flux = compute_primitive(u_flux)
 
         '''Can add some limniters here'''
@@ -514,40 +488,14 @@ if __name__ == "__main__":
         x_flux_coord = flux_pint_coor(x, flux_points)
         
         # Compute flux values
-        flux = HLLC(u_flux,p_flux,p_from_u_flux,jmax,flag_p)
-        # flux = Lax(u_flux,p_flux,p_from_u_flux,jmax,flag_p,dt,dx)
+        if(flux_type == 'Rusanov'):
+            flux = Lax(u_flux,p_flux,p_from_u_flux,jmax,flag_p,dt,dx)
+        elif(flux_type == 'HLLC'):
+            flux = HLLC(u_flux,p_flux,p_from_u_flux,jmax,flag_p)
         
-        # Loop over elements to update residuals and solution
-        du = np.zeros_like(u)  # Initialize du to zero at each time step
-        res1 = np.zeros_like(u)
-        res2 = np.zeros_like(u)
-
-        '''Time integration RK2nd'''
-        # print(Mass)
-        for k in range(num_element):
-            # Initialize residuals for each element
-            
-            # Compute residuals
-            for i in range(Np):  # basis loop
-                for j in range(Np):  # node loop
-                    res1[k,i,0] += - u[k,j,1]* Stiff[j, i]
-                    res1[k,i,1] += - (u[k,j,1]**2/u[k,j,0]+ primitive_variable[k,j,2])*Stiff[j,i]
-                    res1[k,i,2] += - (u[k,j,2]+primitive_variable[k,j,2])*primitive_variable[k,j,1]*Stiff[j,i]
-                res2[k,i,:] = (flux[k + 1,:] * basis_val_flux_points[i, 1] - flux[k,:] * basis_val_flux_points[i, 0])
-
-            # Update du and u
-            
-            for i in range(Np):
-                for j in range(Np):
-                    du[k, i,:] += -dt / element_trans[k] * inverse_M[i, j] * (res1[k,j,:]+res2[k,j,:])
-                u[k, i,:] = 0.5*(un[k,i,:]+u_old[k,i,:]+ du[k, i,:])
-            # u1 = u.copy()
-            # u_flux1 = u_flux.copy()
-            
-            
-            
+        '''Time integration RK2nd 2nd step'''
+        u = RK2.RK2nd_2nd_step(u,u_old,un,primitive_variable,Stiff,flux,basis_val_flux_points,dt,inverse_M,element_trans)
         time += dt
-        # print(time)
     
 
     # print(x_element.shape)
@@ -563,8 +511,8 @@ if __name__ == "__main__":
     
 
     plt.figure(figsize=(8, 6))
-    plt.plot(x_coord, u_coord, marker='o', linestyle='-', color='b', label='Latest data')
-    plt.plot(x_coord, p_coord, marker='o', linestyle='-', color='r', label='Latest data')
+    plt.plot(x_coord, u_coord, linestyle='-', color='k', label='Density')
+    plt.plot(x_coord, p_coord, linestyle='-', color='r', label='Pressure')
     # plt.plot(x_coord, u_ini_coord, marker='o', linestyle='-', color='r', label='initial')
     plt.xlabel('x')
     plt.ylabel('Density')
