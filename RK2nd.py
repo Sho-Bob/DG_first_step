@@ -105,7 +105,27 @@ for k in range(num_element):
                     du[k, i,:] += -dt / element_trans[k] * inverse_M[i, j] * (res1[k,j,:]+res2[k,j,:])
                 u[k, i,:] = 0.5*(un[k,i,:]+u_old[k,i,:]+ du[k, i,:])
 """
+def RK2nd_2nd_step_(u, u_old, un, primitive_variable, Stiff, flux, basis_val_flux_points, dt, inverse_M, element_trans):
+    num_element, Np, _ = u.shape
+    du = np.zeros_like(u)
+    res1 = np.zeros_like(u)
+    res2 = np.zeros_like(u)
+    for k in range(num_element):            
+        # Compute residuals
+        for i in range(Np):  # basis loop
+            for j in range(Np):  # node loop
+                res1[k,i,0] += - u[k,j,1]* Stiff[j, i]
+                res1[k,i,1] += - (u[k,j,1]**2/u[k,j,0]+ primitive_variable[k,j,2])*Stiff[j,i]
+                res1[k,i,2] += - (u[k,j,2]+primitive_variable[k,j,2])*primitive_variable[k,j,1]*Stiff[j,i]
+            res2[k,i,:] = (flux[k + 1,:] * basis_val_flux_points[i, 1] - flux[k,:] * basis_val_flux_points[i, 0])
 
+        # Update du and u
+        
+        for i in range(Np):
+            for j in range(Np):
+                du[k, i,:] += -dt / element_trans[k] * inverse_M[i, j] * (res1[k,j,:]+res2[k,j,:])
+            u[k, i,:] = 0.5*(un[k,i,:]+u_old[k,i,:]+ du[k, i,:])
+    return u
 
 def RK2nd_2nd_step(
     u, u_old, un, primitive_variable,

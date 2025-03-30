@@ -177,7 +177,7 @@ def compute_dt(dx,velo,CFL):
 if __name__ == "__main__":
     jmax = 5
     num_element = jmax-1
-    approx_order = 4
+    approx_order = 7
     flux_number = 2
     time = 0.0
     Np = approx_order+1
