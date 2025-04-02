@@ -79,55 +79,8 @@ def HLLC(u_flux,p_flux,p_from_u, jmax,flag_p):
     flux[nf-1,:] = [u_flux[nf-2,1,1],(u_flux[nf-2,1,1]**2/u_flux[nf-2,1,0]+p_from_u[nf-2,1,2]),(u_flux[nf-2,1,2]+p_from_u[nf-2,1,2])*p_from_u[nf-2,1,1]]
     return flux
 
-def Lax(u_flux,p_flux,p_from_u, jmax,flag_p,dt,dx):
-    '''upwind flux'''
-    nf = jmax
-    flux = np.zeros((jmax,3))
-    gamma = 1.4
-    sound = np.zeros((nf-1,2))
-    # Compute flux for internal points
-    for i in range(nf-1):
-        if(p_from_u[i,0,0]<=0):
-            print("ERROR negative density",i,p_from_u[i,0,0]  )
-        elif(p_from_u[i,0,2]<=0):
-            print("ERROR negative pressure",i,p_from_u[i,0,2]  )
-        sound[i,0] = np.sqrt(gamma*p_from_u[i,0,2]/p_from_u[i,0,0])
-        if(sound[i,0] is np.nan):
-            print("ERROR sound speed",i,p_from_u[i,0,2],p_from_u[i,0,0]  )
-        if(p_from_u[i,1,0]<=0):
-            print("ERROR negative density",i,p_from_u[i,1,0]  )
-        elif(p_from_u[i,1,2]<=0):
-            print("ERROR negative pressure",i,p_from_u[i,1,2]  )
-        sound[i,1] = np.sqrt(gamma*p_from_u[i,1,2]/p_from_u[i,1,0])
-        if(sound[i,1] is np.nan):
-            print("ERROR sound speed",i,p_from_u[i,1,2],p_from_u[i,1,0]  )
-    for i in range(1, nf-1):
-        '''Extract L and R'''
-        aL = sound[i-1,1]
-        aR = sound[i,0]
-        eL = u_flux[i-1,1,2]
-        eR = u_flux[i  ,0,2]
-        rhoL = u_flux[i-1,1,0]
-        rhoR = u_flux[i,0,0]
-        uL = p_from_u[i-1,1,1]
-        uR = p_from_u[i,  0,1]
-        pL = p_from_u[i-1,1,2]
-        pR = p_from_u[i,  0,2]
-        fL = [rhoL*uL,rhoL*uL**2+pL, (eL+pL)*uL]
-        fR = [rhoR*uR,rhoR*uR**2+pR, (eR+pR)*uR]
-        u_vec_L = [rhoL, rhoL*uL, eL]
-        u_vec_R = [rhoR, rhoR*uR, eR]
-        fL = np.array(fL)
-        fR = np.array(fR)
-        u_L = np.array(u_vec_L)
-        u_R = np.array(u_vec_R)
-        flux[i,:] = 0.5*(fL[:]+fR[:]) - 0.5*max(aL+np.abs(uL),aR+np.abs(uR))*(u_R[:]-u_L[:])
-    
-    flux[0,:] = [u_flux[0,0,1],(u_flux[0,0,1]**2/u_flux[0,0,0]+p_from_u[0,0,2]),(u_flux[0,0,2]+p_from_u[0,0,2])*p_from_u[0,0,1]]
-    flux[nf-1,:] = [u_flux[nf-2,1,1],(u_flux[nf-2,1,1]**2/u_flux[nf-2,1,0]+p_from_u[nf-2,1,2]),(u_flux[nf-2,1,2]+p_from_u[nf-2,1,2])*p_from_u[nf-2,1,1]]
-    return flux
 
-def Rusanov(u_flux,p_flux,p_from_u, jmax):
+def Rusanov(u_flux,p_flux,p_from_u, jmax,time_step):
     '''upwind flux'''
     nf = jmax
     flux = np.zeros((jmax,3))
@@ -135,7 +88,11 @@ def Rusanov(u_flux,p_flux,p_from_u, jmax):
     sound = np.zeros((nf-1,2))
     # Compute flux for internal points
     for i in range(nf-1):
+        if(p_from_u[i,0,2]<=0):
+            print("ERROR negative pressure",i,p_from_u[i,0,2],time_step  )
         sound[i,0] = np.sqrt(gamma*p_from_u[i,0,2]/p_from_u[i,0,0])
+        if(p_from_u[i,1,2]<=0):
+            print("ERROR negative pressure",i,p_from_u[i,1,2],time_step  )
         sound[i,1] = np.sqrt(gamma*p_from_u[i,1,2]/p_from_u[i,1,0])
     for i in range(1, nf-1):
         '''Extract L and R'''

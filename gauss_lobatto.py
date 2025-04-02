@@ -48,7 +48,7 @@ def gauss_lobatto_points(n):
 
 # Example usage
 if __name__ == "__main__":
-    n = 5  # Number of quadrature points
+    n = 3  # Number of quadrature points
     points, weights = gauss_lobatto_points(n)
 
     print(f"Gauss-Lobatto quadrature points for n = {n}: {points}")

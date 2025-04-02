@@ -9,6 +9,7 @@ import RK2nd as RK2
 import limiters as lim
 import flx as flx
 import plotter 
+import init
 
 # Compute dx/dr 
 def transform_mat(x):
@@ -127,29 +128,6 @@ def compute_stiff_matrix(xq_points,xq_weights):
                 L[i][j] += basis_value[i,k]*basis_grad_value[j,k]*xq_weights[k]
     return L
 
-def init_variable_sod(u,x,xq):
-    u_shape = u.shape
-    x_elem = np.zeros((u.shape[0],u.shape[1]))
-    gamma = 1.4
-    rhoL = 1.0
-    pL = 1.0
-    uL = 0.0
-    rhoR= 0.125
-    pR=0.1
-    uR=0.0
-    for i in range(u_shape[0]): # element loop
-        for j in range(u_shape[1]): # np loop
-            x_elem[i,j] = 0.5*(x[i+1]+x[i]) + 0.5*(x[i+1]-x[i])*xq[j]
-            if(x_elem[i,j]<0.5):
-                u[i,j,0] = rhoL
-                u[i,j,1] = rhoL*uL
-                u[i,j,2] = pL/(gamma-1)+0.5*rhoL*uL**2
-            if(x_elem[i,j]>=0.5):
-                u[i,j,0] = rhoR
-                u[i,j,1] = rhoR*uR
-                u[i,j,2] = pR/(gamma-1)+0.5*rhoR*uR**2
-    return u,x_elem
-
 def flux_pint_coor(x,flux_points):
     Ne = x.shape[0]-1
     nf = len(flux_points)
@@ -183,87 +161,6 @@ def compute_dt(dx,primitive,CFL):
     dt = np.min(dt_candidate)
     return dt
 
-def trunc(a, decimals=8):
-        '''
-    This function truncates a float to a specified decimal place.
-    Adapted from:
-    https://stackoverflow.com/questions/42021972/
-    truncating-decimal-digits-numpy-array-of-floats
-
-    Inputs:
-    -------
-        a: value(s) to truncate
-        decimals: truncated decimal place
-
-    Outputs:
-    --------
-        truncated float
-    '''
-        return np.trunc(a*10**decimals)/(10**decimals)
-
-def PP_limiter(u_flux,u,p_from_u_flux,primitive_variable,cons_v_cell_av,prim_v_cell_av):
-    flux_shape = u_flux.shape
-    u_shape = u.shape
-    RES_TOL = 1.e-10
-    unfiltered = u.copy()
-    unfiltered_f = u_flux.copy()
-    min_density1 = 0.0
-    min_density2 = 0.0
-    min_density = 0.0
-    min_pressure = 0.0
-    min_pressure1 = 0.0
-    min_pressure2 = 0.0
-    alpha = 0.3
-    '''Fiirst,limit with the denstiy'''
-    # for i in range(u_shape[0]):
-    #     rho_bar = prim_v_cell_av[i,0]
-    #     theta1 = np.abs((rho_bar-RES_TOL)/(rho_bar-primitive_variable[i,:,0]+RES_TOL))
-    #     theta2 = np.abs((rho_bar-RES_TOL)/(rho_bar-p_from_u_flux[i,:,0]+RES_TOL))
-    #     theta3 = trunc(np.minimum(1.0, np.min(theta1)))
-    #     theta4 = trunc(np.minimum(1.0, np.min(theta2)))
-    #     theta = min(theta3,theta4)
-    #     # min_density1 = np.min(primitive_variable[i,:,0])
-    #     # min_density2 = np.min(p_from_u_flux[i,:,0])
-    #     # min_density = min(min_density1,min_density2)
-    #     # theta = np.abs((prim_v_cell_av[i,0]-alpha*prim_v_cell_av[i,0])/(prim_v_cell_av[i,0]-min_density+RES_TOL))
-    #     # theta = trunc(theta)
-    #     # theta = min(1.0,theta)
-    #     # print(theta)
-    #     # theta = 0.0
-    #     for j in range(u_shape[1]):
-    #         u[i,j,0] = theta*u[i,j,0] + (1.0-theta)*cons_v_cell_av[i,0]
-    #     for j in range(flux_shape[1]):
-    #         u_flux[i,j,0] = theta*u_flux[i,j,0] + (1.0-theta)*cons_v_cell_av[i,0]
-    # primitive_variable = compute_primitive(u)
-    # p_from_u_flux = compute_primitive(u_flux)
-
-    unfiltered = u.copy()
-    unfiltered_f = u_flux.copy()
-    '''Second, limit with the pressure'''
-    for i in range(u_shape[0]):
-        p_bar = prim_v_cell_av[i,2]
-        theta1 = np.abs((p_bar-alpha*p_bar)/(p_bar-primitive_variable[i,:,2]+RES_TOL))
-        theta2 = np.abs((p_bar-alpha*p_bar)/(p_bar-p_from_u_flux[i,:,2]+RES_TOL))
-        theta3 = trunc(np.minimum(1.0, np.min(theta1)))
-        theta4 = trunc(np.minimum(1.0, np.min(theta2)))
-        theta = min(theta3,theta4)
-        # min_pressure1 = np.min(primitive_variable[i,:,2])
-        # min_pressure2 = np.min(p_from_u_flux[i,:,2])
-        # min_pressure = min(min_pressure1,min_pressure2)
-        # theta = np.abs((prim_v_cell_av[i,2]-alpha*prim_v_cell_av[i,2])/(prim_v_cell_av[i,2]-min_pressure+RES_TOL))
-        # theta = trunc(theta)
-        # theta = min(1.0,theta)
-        # print(theta)
-        # theta = 0.0
-        for j in range(u_shape[1]):
-            u[i,j,:] = theta*unfiltered[i,j,:] + (1.0-theta)*cons_v_cell_av[i,:]
-        for j in range(flux_shape[1]):
-            u_flux[i,j,:] = theta*unfiltered_f[i,j,:] + (1.0-theta)*cons_v_cell_av[i,:]
-    # primitive_variable = compute_primitive(u)
-    # p_from_u_flux = compute_primitive(u_flux)
-
-    return u_flux, u
-
 def compute_primitive(u):
     u_shape = u.shape
     primitive_variable = np.zeros_like(u)
@@ -288,12 +185,15 @@ def compute_cell_average(u,primitive_variable,xq_weights,trans_matrix,dx):
     return cons_v_cell_average, prim_v_cell_average 
 
 if __name__ == "__main__":
-    jmax = 101
+    jmax = 201
+    time_step = 0
     num_element = jmax-1
-    approx_order = 1
+    approx_order = 2
     flux_number = 2
     time = 0.0
-    flux_type = 'HLLC'
+    flux_type = 'Rusanov' # 'Rusanov' or 'HLLC'
+    limiter_type = 'PP' # 'PP' or 'minmod'
+    initial = 'sod' # 'sod' or 'contact'
     # number of nodes in each element: At quad points
     Np = approx_order+1
     u = np.zeros((num_element,Np,3))
@@ -302,7 +202,7 @@ if __name__ == "__main__":
     u_flux = np.zeros((num_element,flux_number,3))
     du = np.zeros_like(u)
     a = 1.0
-    CFL = 0.1
+    CFL = 0.03
     gamma = 1.4
     flag_p = False
     x_min, x_max = 0.0,1.0
@@ -313,7 +213,10 @@ if __name__ == "__main__":
     # dt = 0.02*np.min(dx)/a
     element_trans = transform_mat(x)
     xq_points, xq_weights = gauss_legendre_points(Np)
-    u,x_element = init_variable_sod(u,x,xq_points)
+    if(initial == 'sod'):
+        u,x_element = init.init_variable_sod(u,x,xq_points)
+    elif(initial == 'contact'):
+        u,x_element = init.init_variable_contact_d(u,x,xq_points)
     primitive_variable = np.zeros_like(u) # [rho, u, p]
     primitive_variable = compute_primitive(u)
     cons_v_cell_average, prim_v_cell_average = compute_cell_average(u,primitive_variable,xq_weights,element_trans,dx)
@@ -328,78 +231,104 @@ if __name__ == "__main__":
     Stiff2 = compute_stiff_matrix2(Mass,grad_basis_val_at_nodes)
     dt = compute_dt(dx,primitive_variable,CFL)
     print("Precompute martices and weights are done")
-
+    # Initialize u_flux at each time step
+    primitive_variable = compute_primitive(u)
+    u_flux = np.zeros((num_element, flux_number,3))
+    p_flux = np.zeros((num_element, flux_number,3))
+    p_from_u_flux = np.zeros((num_element, flux_number,3))
+    # Compute u_flux
+    u_flux, p_flux = interpolation.compute_flux_point_values(u, primitive_variable, basis_val_flux_points, num_element, flux_number, Np)
+    p_from_u_flux = compute_primitive(u_flux)
+    x_flux_coord = flux_pint_coor(x,flux_points)
+    # plotter.plot(u_flux,x_flux_coord,p_from_u_flux)
 
     while (time < 0.12):
-        coefs = [0.5,1.0]
+
         un = u.copy()
         dt = compute_dt(dx,primitive_variable,CFL)
         cons_v_cell_average, prim_v_cell_average = compute_cell_average(u,primitive_variable,xq_weights,element_trans,dx)
         u_old = u.copy()
-        # Initialize u_flux at each time step
-        primitive_variable = compute_primitive(u)
-        u_flux = np.zeros((num_element, flux_number,3))
-        p_flux = np.zeros((num_element, flux_number,3))
-        p_from_u_flux = np.zeros((num_element, flux_number,3))
         
-        # Compute u_flux
-        u_flux, p_flux = interpolation.compute_flux_point_values(u, primitive_variable, basis_val_flux_points, num_element, flux_number, Np)
-        p_from_u_flux = compute_primitive(u_flux)
         
-        '''Can add some limniters here'''
-        u_flux, u = PP_limiter(u_flux,u,p_from_u_flux,primitive_variable,cons_v_cell_average,prim_v_cell_average)
-        primitive_variable = compute_primitive(u)
-        p_from_u_flux = compute_primitive(u_flux)
-        # Compute flux coordinates
-        x_flux_coord = flux_pint_coor(x, flux_points)
-
-        # plotter.plot(u_flux,x_flux_coord,p_from_u_flux)
         # Compute flux values
-        if(flux_type == 'Rusanov'):
-            flux = flx.Lax(u_flux,p_flux,p_from_u_flux,jmax,flag_p,dt,dx)
-        elif(flux_type == 'HLLC'):
+        if(flux_type == 'HLLC'):
             flux = flx.HLLC(u_flux,p_flux,p_from_u_flux,jmax,flag_p)
+        elif(flux_type == 'Rusanov'):
+            flux = flx.Rusanov(u_flux,p_flux,p_from_u_flux,jmax)
 
         '''Time integration RK2nd 1st step'''
         u = RK2.RK2nd_1st(u,un,primitive_variable,Stiff,flux,basis_val_flux_points,dt,inverse_M,element_trans,num_element,Np)
         
-        u_old = u.copy()
-        primitive_variable = compute_primitive(u)
-        u_flux = np.zeros((num_element, flux_number,3))
-        p_flux = np.zeros((num_element, flux_number,3))
-        p_from_u_flux = np.zeros((num_element, flux_number,3))
-        # Compute u_flux
-        u_flux, p_flux = interpolation.compute_flux_point_values(u, primitive_variable, basis_val_flux_points, num_element, flux_number, Np)
-        p_from_u_flux = compute_primitive(u_flux)
-
+        cons_v_cell_average, prim_v_cell_average = compute_cell_average(u,primitive_variable,xq_weights,element_trans,dx)
         '''Can add some limniters here'''
-        u_flux, u = PP_limiter(u_flux,u,p_from_u_flux,primitive_variable,cons_v_cell_average,prim_v_cell_average)
+        u_flux,p_flux = interpolation.compute_flux_point_values(u, primitive_variable, basis_val_flux_points, num_element, flux_number, Np)
+        p_from_u_flux = compute_primitive(u_flux)
+        
+        if(limiter_type == 'PP'):
+            u_flux,u = lim.PP_limiter(u_flux,u,p_from_u_flux,primitive_variable,cons_v_cell_average,prim_v_cell_average)
+        elif(limiter_type == 'minmod'):
+            u_flux,u = lim.minmod(u,u_flux,cons_v_cell_average,x,x_element)
         primitive_variable = compute_primitive(u)
         p_from_u_flux = compute_primitive(u_flux)
-        # Compute flux coordinates
-        x_flux_coord = flux_pint_coor(x, flux_points)
-        
+        # print("Before limiter")
+        # plotter.plot(u,x_element,primitive_variable)
+        u_old = u.copy()
+
+        # print("After limiter")
+        # plotter.plot(u,x_element,primitive_variable)
+
         # Compute flux values
         if(flux_type == 'Rusanov'):
-            flux = flx.Lax(u_flux,p_flux,p_from_u_flux,jmax,flag_p,dt,dx)
+            flux = flx.Rusanov(u_flux,p_flux,p_from_u_flux,jmax)
         elif(flux_type == 'HLLC'):
             flux = flx.HLLC(u_flux,p_flux,p_from_u_flux,jmax,flag_p)
         
         '''Time integration RK2nd 2nd step'''
         u = RK2.RK2nd_2nd_step(u,u_old,un,primitive_variable,Stiff,flux,basis_val_flux_points,dt,inverse_M,element_trans)
-        # plotter.plot(u,x_element,primitive_variable)
-        # plotter.plot(u_flux,x_flux_coord,p_from_u_flux)
-        time += dt
-    
+        primitive_variable_2nd = compute_primitive(u)
+        cons_v_cell_average, prim_v_cell_average = compute_cell_average(u,primitive_variable_2nd,xq_weights,element_trans,dx)
+        if(limiter_type == 'PP'):
+            # Check for negative density or pressure and restart with smaller dt if needed
+            if (cons_v_cell_average[:,0] < 0).any() or (prim_v_cell_average[:,2] < 0).any():
+                # Reset time step and variables
+                dt = dt/2
+                u = un.copy() # Reset to start of time step
+                primitive_variable = compute_primitive(u)
+                continue # Restart the time step
+            else:
+                u_flux,p_flux = interpolation.compute_flux_point_values(u, primitive_variable, basis_val_flux_points, num_element, flux_number, Np)
+                p_from_u_flux = compute_primitive(u_flux)   
+                u_flux, u = lim.PP_limiter(u_flux,u,p_from_u_flux,primitive_variable,cons_v_cell_average,prim_v_cell_average)
+                primitive_variable = compute_primitive(u)
+                p_from_u_flux = compute_primitive(u_flux)
+                cons_v_cell_average, prim_v_cell_average = compute_cell_average(u,primitive_variable,xq_weights,element_trans,dx)
+                time += dt
+                time_step += 1
+        elif(limiter_type == 'minmod'):
+            u_flux,p_flux = interpolation.compute_flux_point_values(u, primitive_variable, basis_val_flux_points, num_element, flux_number, Np)
+            p_from_u_flux = compute_primitive(u_flux)   
+            # u_flux, u = lim.PP_limiter(u_flux,u,p_from_u_flux,primitive_variable,cons_v_cell_average,prim_v_cell_average)
+            u_flux, u = lim.minmod(u,u_flux,cons_v_cell_average,x,x_element)
+            primitive_variable = compute_primitive(u)
+            p_from_u_flux = compute_primitive(u_flux)
+            cons_v_cell_average, prim_v_cell_average = compute_cell_average(u,primitive_variable,xq_weights,element_trans,dx)
+            time += dt
+            time_step += 1
+            # if(time_step % 2 == 0):
+            #     plotter.plot(u,x_element,primitive_variable)
+            #     plotter.plot_cell_average(cons_v_cell_average,prim_v_cell_average)
 
-    # print(x_element.shape)
-    # print(u.shape)
+        
+
     x_coord = x_element.flatten()
     u_coord = u[:,:,0].flatten()
     p_coord = primitive_variable[:,:,2].flatten()
+    velo_coord = primitive_variable[:,:,1].flatten()
 
     # x_coord = x_flux_coord.flatten()
     # u_coord = p_from_u_flux[:,:,2].flatten()
+
+    x_cell_average = np.linspace(0,1,num_element)
 
     u_ini_coord = u_ini[:,:,0].flatten()
     
@@ -407,10 +336,14 @@ if __name__ == "__main__":
     plt.figure(figsize=(8, 6))
     plt.plot(x_coord, u_coord, linestyle='-', color='k', label='Density')
     plt.plot(x_coord, p_coord, linestyle='-', color='r', label='Pressure')
+    plt.plot(x_coord, velo_coord, linestyle='-', color='g', label='Velocity')
+    # plt.plot(x_cell_average, prim_v_cell_average[:,0],linestyle='-', color='b', label='Cell average density')
+    # plt.plot(x_cell_average, prim_v_cell_average[:,1],linestyle='-', color='g', label='Cell average velocity')
+    # plt.plot(x_cell_average, prim_v_cell_average[:,2],linestyle='-', color='r', label='Cell average pressure')
     # plt.plot(x_coord, u_ini_coord, marker='o', linestyle='-', color='r', label='initial')
     plt.xlabel('x')
     plt.ylabel('Density')
-    # plt.title('Plot of x_coord vs u_coord')
+    plt.title('cells = '+str(jmax)+', order = '+str(approx_order)+', flux = '+flux_type+', limiter = '+limiter_type + ', CFL = '+str(CFL))
     plt.legend()
     plt.grid(True)
     plt.show()
