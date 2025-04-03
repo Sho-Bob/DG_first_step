@@ -23,6 +23,29 @@ def init_variable_sod(u,x,xq):
                 u[i,j,2] = pR/(gamma-1)+0.5*rhoR*uR**2
     return u,x_elem
 
+def init_variable_shuosher(u,x,xq):
+    u_shape = u.shape
+    x_elem = np.zeros((u.shape[0],u.shape[1]))
+    gamma = 1.4
+    rhoL = 3.857143
+    pL = 10.3333
+    uL = 2.629369
+    for i in range(u_shape[0]): # element loop
+        for j in range(u_shape[1]): # np loop
+            x_elem[i,j] = 0.5*(x[i+1]+x[i]) + 0.5*(x[i+1]-x[i])*xq[j]
+            rhoR = 1.0+0.2*np.sin(5.0*x_elem[i,j])
+            pR = 1.0
+            uR = 0.0
+            if(x_elem[i,j]<-4.0):
+                u[i,j,0] = rhoL
+                u[i,j,1] = rhoL*uL
+                u[i,j,2] = pL/(gamma-1)+0.5*rhoL*uL**2
+            if(x_elem[i,j]>=-4.0):
+                u[i,j,0] = rhoR
+                u[i,j,1] = rhoR*uR
+                u[i,j,2] = pR/(gamma-1)+0.5*rhoR*uR**2
+    return u,x_elem
+
 def init_variable_contact_d(u,x,xq):
     u_shape = u.shape
     x_elem = np.zeros((u.shape[0],u.shape[1]))
@@ -36,15 +59,15 @@ def init_variable_contact_d(u,x,xq):
     for i in range(u_shape[0]): # element loop
         for j in range(u_shape[1]): # np loop
             x_elem[i,j] = 0.5*(x[i+1]+x[i]) + 0.5*(x[i+1]-x[i])*xq[j]
-            # u[i,j,0] = 2.0+np.sin(2.0*x_elem[i,j]*np.pi)
-            # u[i,j,1] = u[i,j,0]
-            # u[i,j,2] = (pL)/(gamma-1)+0.5*u[i,j,1]**2/u[i,j,0]
-            if(x_elem[i,j]<0.75 and x_elem[i,j]>0.25):
-                u[i,j,0] = rhoL
-                u[i,j,1] = rhoL*uL
-                u[i,j,2] = pL/(gamma-1)+0.5*rhoL*uL**2
-            else:
-                u[i,j,0] = rhoR
-                u[i,j,1] = rhoR*uR
-                u[i,j,2] = pR/(gamma-1)+0.5*rhoR*uR**2
+            u[i,j,0] = 2.0+np.sin(2.0*x_elem[i,j]*np.pi)
+            u[i,j,1] = u[i,j,0]
+            u[i,j,2] = (pL)/(gamma-1)+0.5*u[i,j,1]**2/u[i,j,0]
+            # if(x_elem[i,j]<0.75 and x_elem[i,j]>0.25):
+            #     u[i,j,0] = rhoL
+            #     u[i,j,1] = rhoL*uL
+            #     u[i,j,2] = pL/(gamma-1)+0.5*rhoL*uL**2
+            # else:
+            #     u[i,j,0] = rhoR
+            #     u[i,j,1] = rhoR*uR
+            #     u[i,j,2] = pR/(gamma-1)+0.5*rhoR*uR**2
     return u,x_elem

@@ -25,24 +25,20 @@ def PP_limiter_Lobatto(u,primitive_variable,cons_v_cell_av,prim_v_cell_av,limite
     u_shape = u.shape
     u1 = u.copy()
     u2 = u.copy()
-    RES_TOL = 1.e-12
+    RES_TOL = 1.e-20
     for i in range(u_shape[0]):
         rho_bar = prim_v_cell_av[i,0]
-        min_rho = np.min(primitive_variable[i,:,0])
-        theta = np.abs((rho_bar-RES_TOL)/(rho_bar-min_rho+RES_TOL))
-        theta =  trunc(np.minimum(1.0, theta))
-        # print(theta)
+        theta1 = np.abs((rho_bar-RES_TOL)/(rho_bar-u[i,:,0]+RES_TOL))
+        theta =  trunc(np.minimum(1.0, np.min(theta1)))
         limiter_val1[i] = theta
         for j in range(u_shape[1]):
-            u[i,j,:] = theta*u[i,j,:] + (1.0-theta)*cons_v_cell_av[i,:]
-    primitive_variable2 = el.compute_primitive(u)
+            u1[i,j,:] = theta*u[i,j,:] + (1.0-theta)*cons_v_cell_av[i,:]
+    primitive_variable2 = el.compute_primitive(u1)
 
     for i in range(u_shape[0]):
         p_bar = prim_v_cell_av[i,2]
-        p_min = np.min(primitive_variable2[i,:,2])
-        theta = np.abs((p_bar)/(p_bar-p_min+RES_TOL))
-        theta =  trunc(np.minimum(1.0, theta))
-        # theta = trunc(np.minimum(1.0, np.min(theta1)))
+        theta1 = np.abs((p_bar)/(p_bar-primitive_variable2[i,:,2]+RES_TOL))
+        theta =  trunc(np.minimum(1.0, np.min(theta1)))
         if(theta<1.0):
             print("LIMITER",theta,i)
         limiter_val2[i] = theta
@@ -147,6 +143,40 @@ def minmod(u,u_flux,cons_v_cell_av,x,x_element):
     u_flux1[-1,:,:] = cons_v_cell_av[-1,:]
 
     return u_flux1, u1
+
+def minmod_lobatto(u,cons_v_cell_av,prim_v_cell_av,x,x_element):
+    
+    u_shape = u.shape
+    RES_TOL = 1.e-12
+    unfiltered = u.copy()
+    
+    u1 = u.copy()
+    
+    for i in range(1,u_shape[0]-1): # element loop
+        element_center = (x[i]+x[i+1])/2
+        # element_center = np.mean(x_element[i,:])
+        h = x[i+1] - x[i]
+        diff1 = cons_v_cell_av[i,:]-u[i,0,:]
+        diff2 = cons_v_cell_av[i,:]-cons_v_cell_av[i-1,:]
+        diff3 = cons_v_cell_av[i+1,:]-cons_v_cell_av[i,:]
+        diff4 = u[i,1,:] - cons_v_cell_av[i,:]
+        diff5 = cons_v_cell_av[i,:] - cons_v_cell_av[i-1,:]
+        diff6 = cons_v_cell_av[i+1,:] - cons_v_cell_av[i,:]
+        for k in range(3):
+            filtered_val1 = cons_v_cell_av[i,k] - minmod_func(diff1[k],diff2[k],diff3[k])
+            filtered_val2 = cons_v_cell_av[i,k] + minmod_func(diff4[k],diff5[k],diff6[k])
+            if (filtered_val1 == u[i,0,k] and filtered_val2 == u[i,1,k]):
+                print("No filter",i)
+                continue
+            else:                
+                for l in range(u_shape[1]):
+                    grad = minmod_func(diff1[k]*2/h, 2.0*diff2[k]/h, 2.0*diff3[k]/h)
+                    u[i,l,k] = cons_v_cell_av[i,k] + grad*(x_element[i,l]-element_center)
+ 
+    #Dirichlet boundary condition
+    u[0,:,:] = cons_v_cell_av[0,:]
+    u[-1,:,:] = cons_v_cell_av[-1,:]
+
 
 def minmod_func(a,b,c):
     if(np.sign(a) == np.sign(b) and np.sign(a) == np.sign(c)):
