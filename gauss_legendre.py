@@ -18,9 +18,9 @@ def gauss_legendre_points(n):
 
     return points, weights
 
-if __name__ == "main":
+if __name__ == "__main__":
 # Example: Compute Gauss-Legendre points and weights for degree 5
-    n = 3
+    n = 1
     points, weights = gauss_legendre_points(n)
     print("Gauss-Legendre quadrature points for n =", n, ":", points)
     print("Corresponding weights for n =", n, ":", weights)
