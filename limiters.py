@@ -1,7 +1,16 @@
 import numpy as np
 import euler as el
 
-
+def compute_primitive(u):
+    u_shape = u.shape
+    primitive_variable = np.zeros_like(u)
+    gamma =1.4
+    for i in range(u_shape[0]):
+        for j in range(u_shape[1]):
+            primitive_variable[i,j,0] = u[i,j,0]
+            primitive_variable[i,j,1] = u[i,j,1]/u[i,j,0]
+            primitive_variable[i,j,2] = (gamma-1.0)*(u[i,j,2]-0.5*u[i,j,1]**2/u[i,j,0])
+    return primitive_variable
 
 def trunc(a, decimals=8):
         '''
@@ -26,24 +35,28 @@ def PP_limiter_Lobatto(u,primitive_variable,cons_v_cell_av,prim_v_cell_av,limite
     u1 = u.copy()
     u2 = u.copy()
     RES_TOL = 1.e-20
-    for i in range(u_shape[0]):
+    for i in range(u_shape[0]): # element loop
         rho_bar = prim_v_cell_av[i,0]
         theta1 = np.abs((rho_bar-RES_TOL)/(rho_bar-u[i,:,0]+RES_TOL))
         theta =  trunc(np.minimum(1.0, np.min(theta1)))
         limiter_val1[i] = theta
-        for j in range(u_shape[1]):
-            u1[i,j,:] = theta*u[i,j,:] + (1.0-theta)*cons_v_cell_av[i,:]
-    primitive_variable2 = el.compute_primitive(u1)
+        for j in range(u_shape[1]): # node loop
+            u1[i,j,0] = theta*u[i,j,0] + (1.0-theta)*cons_v_cell_av[i,0]
+    primitive_variable2 = compute_primitive(u1)
 
-    for i in range(u_shape[0]):
+    for i in range(u_shape[0]): # element loop
         p_bar = prim_v_cell_av[i,2]
         theta1 = np.abs((p_bar)/(p_bar-primitive_variable2[i,:,2]+RES_TOL))
         theta =  trunc(np.minimum(1.0, np.min(theta1)))
-        if(theta<1.0):
-            print("LIMITER",theta,i)
         limiter_val2[i] = theta
         for j in range(u_shape[1]):
-            u[i,j,:] = theta*u[i,j,:] + (1.0-theta)*cons_v_cell_av[i,:]
+            
+            u[i,j,:] = theta*u1[i,j,:] + (1.0-theta)*cons_v_cell_av[i,:]
+            if(theta<1.0):
+                print("LIMITER",theta,i,j)
+                print(u[i,j,0])
+                print(u1[i,j,0])
+                print(cons_v_cell_av[i,0])
 
 
 def PP_limiter(u_flux,u,p_from_u_flux,primitive_variable,cons_v_cell_av,prim_v_cell_av,quad_type):

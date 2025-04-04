@@ -16,3 +16,12 @@ def compute_flux_point_values(u, primitive_variable, basis_val_flux_points, num_
     p_flux = np.einsum('ijk,jl->ilk', p_reshaped, basis_val_flux_points)
     
     return u_flux, p_flux
+
+def compute_lobatto_point_values(u, primitive_variable, basis_val_lobatto_points, num_element, flux_number, Np):
+    u_reshaped = u.reshape(num_element, Np, 3)
+    p_reshaped = primitive_variable.reshape(num_element, Np, 3)
+    
+    u_lobatto = np.einsum('ijk,jl->ilk', u_reshaped, basis_val_lobatto_points)
+    p_lobatto = np.einsum('ijk,jl->ilk', p_reshaped, basis_val_lobatto_points)
+    
+    return u_lobatto, p_lobatto

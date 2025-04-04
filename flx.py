@@ -156,7 +156,7 @@ def Rusanov_lobatto(u,p_from_u, jmax,time_step):
         rhoR = u[i  ,0,0]
         uL = p_from_u[i-1,-1,1]
         uR = p_from_u[i,  0,1]
-        pL = p_from_u[i-1,1,2]
+        pL = p_from_u[i-1,-1,2]
         pR = p_from_u[i,  0,2]
         fL = [rhoL*uL,rhoL*uL**2+pL, (eL+pL)*uL]
         fR = [rhoR*uR,rhoR*uR**2+pR, (eR+pR)*uR]

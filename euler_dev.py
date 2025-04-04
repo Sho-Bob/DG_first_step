@@ -137,6 +137,14 @@ def flux_pint_coor(x,flux_points):
             x_flux_coord[i,j] = 0.5*(x[i+1]+x[i]) + 0.5*(x[i+1]-x[i])*flux_points[j]
     return x_flux_coord
 
+def lobatto_pint_coor(x,lobatto_points):
+    Ne = x.shape[0]-1
+    nf = len(lobatto_points)
+    x_lobatto_coord = np.zeros((Ne,nf))
+    for i in range(Ne):
+        for j in range(nf):
+            x_lobatto_coord[i,j] = 0.5*(x[i+1]+x[i]) + 0.5*(x[i+1]-x[i])*lobatto_points[j]
+    return x_lobatto_coord
 
 def compute_stiff_matrix2(Mass_matrix,grad_basis_val):
     stiff_matrix = np.zeros_like(Mass_matrix)
@@ -150,14 +158,15 @@ def compute_stiff_matrix2(Mass_matrix,grad_basis_val):
 def compute_dt(dx,primitive,CFL):
     shape = primitive.shape
     gamma = 1.4
-    dt_candidate = np.zeros(shape)
+    dt_candidate = np.zeros((shape[0]*shape[1]))  
+    idx = 0
     for i in range(shape[0]):
         for j in range(shape[1]):
             if(primitive[i,j,2]<0):
                 print("ERROR in", i, j, primitive[i,j,2])
             acoustic = np.sqrt(gamma*primitive[i,j,2]/primitive[i,j,0])
-            dt_candidate = CFL*dx[i]/(acoustic+np.abs(primitive[i,j,1]))
-    dt_candidate = dt_candidate.flatten()
+            dt_candidate[idx] = CFL*dx[i]/(acoustic+np.abs(primitive[i,j,1]))
+            idx += 1
     dt = np.min(dt_candidate)
     return dt
 
@@ -184,7 +193,7 @@ def compute_cell_average(u,primitive_variable,xq_weights,trans_matrix,dx):
         prim_v_cell_average[i,1] = cons_v_cell_average[i,1]/cons_v_cell_average[i,0]
         prim_v_cell_average[i,2] = (gamma-1.0)*(cons_v_cell_average[i,2]-0.5*cons_v_cell_average[i,1]**2/cons_v_cell_average[i,0])
 
-    return cons_v_cell_average, prim_v_cell_average 
+    return cons_v_cell_average, prim_v_cell_average
 
 if __name__ == "__main__":
     jmax = 101
@@ -195,7 +204,7 @@ if __name__ == "__main__":
     time = 0.0
     """if you use Lobatto, approx_order > 0"""
     quad_type = 'Gauss' # 'Gauss' or 'Lobatto'
-    flux_type = 'HLLC' # 'Rusanov' or 'HLLC'
+    flux_type = 'Rusanov' # 'Rusanov' or 'HLLC'
     limiter_type = 'PP' # 'PP' or 'minmod'
     initial = 'sod' # 'sod' or 'contact'
     # number of nodes in each element: At quad points
@@ -208,7 +217,7 @@ if __name__ == "__main__":
     limiter_val2 = np.zeros(num_element)
     du = np.zeros_like(u)
     a = 1.0
-    CFL = 0.05
+    CFL = 0.1
     gamma = 1.4
     flag_p = False
     if(initial == 'shu-osher'):
@@ -224,10 +233,11 @@ if __name__ == "__main__":
     element_trans = transform_mat(x)
     if(quad_type == 'Gauss'):
         xq_points, xq_weights = gauss_legendre_points(Np)
+        x_lobatto_points, x_lobatto_weights = gauss_lobatto_points(Np)
     elif(quad_type == 'Lobatto'):
         xq_points, xq_weights = gauss_lobatto_points(Np)
-    print(sum(xq_weights))
-    print(xq_points)
+    # print(sum(xq_weights))
+    # print(xq_points)
     if(initial == 'sod'):
         u,x_element = init.init_variable_sod(u,x,xq_points)
     elif(initial == 'contact'):
@@ -244,7 +254,9 @@ if __name__ == "__main__":
     Stiff = compute_stiff_matrix(xq_points,xq_weights)
     inverse_M = np.linalg.inv(Mass)
     basis_val_flux_points = init_lag_poly_all(xq_points,flux_points)
+    # print(basis_val_flux_points)
     grad_basis_val_at_nodes = init_lag_poly_grad_all(xq_points,xq_points)
+    # print(grad_basis_val_at_nodes)
     Stiff2 = compute_stiff_matrix2(Mass,grad_basis_val_at_nodes)
     dt = compute_dt(dx,primitive_variable,CFL)
     print("Precompute martices and weights are done")
@@ -252,10 +264,13 @@ if __name__ == "__main__":
     primitive_variable = compute_primitive(u)
     u_flux = np.zeros((num_element, flux_number,3))
     p_flux = np.zeros((num_element, flux_number,3))
+    u_lobatto = np.zeros((num_element, Np, 3))
+    p_lobatto = np.zeros((num_element, Np, 3))
     p_from_u_flux = np.zeros((num_element, flux_number,3))
     # Compute u_flux
     if(quad_type == 'Gauss'):
         u_flux, p_flux = interpolation.compute_flux_point_values(u, primitive_variable, basis_val_flux_points, num_element, flux_number, Np)
+
     elif(quad_type == 'Lobatto'):
         u_flux[:,0,:] = u[:,0,:]
         u_flux[:,1,:] = u[:,-1,:]
@@ -263,6 +278,8 @@ if __name__ == "__main__":
         p_flux[:,1,:] = primitive_variable[:,-1,:]
     p_from_u_flux = compute_primitive(u_flux)
     x_flux_coord = flux_pint_coor(x,flux_points)
+    x_lobatto_coord = lobatto_pint_coor(x,x_lobatto_points)
+    basis_val_lobatto_points = init_lag_poly_all(x_lobatto_points,x_lobatto_points)
     u_flux,u = lim.PP_limiter(u_flux,u,p_from_u_flux,primitive_variable,cons_v_cell_average,prim_v_cell_average,quad_type)
     # plotter.plot(u,x_element,primitive_variable)
     # plotter.plot_cell_average(cons_v_cell_average,prim_v_cell_average,x_cell_average)
@@ -291,7 +308,12 @@ if __name__ == "__main__":
 
             '''Time integration RK2nd 1st step'''
             u = RK2.RK2nd_1st(u,un,primitive_variable,Stiff,flux,basis_val_flux_points,dt,inverse_M,element_trans,num_element,Np)
-            
+            primitive_variable = compute_primitive(u)
+            """test"""
+            # u_lobatto, p_lobatto = interpolation.compute_lobatto_point_values(u, primitive_variable, basis_val_lobatto_points, num_element, flux_number, Np)
+            # u_lobatto[:,0,:] = u_flux[:,0,:]
+            # u_lobatto[:,-1,:] = u_flux[:,-1,:]
+            # cons_v_cell_average, prim_v_cell_average = compute_cell_average(u_lobatto,p_lobatto,x_lobatto_weights,element_trans,dx)
             cons_v_cell_average, prim_v_cell_average = compute_cell_average(u,primitive_variable,xq_weights,element_trans,dx)
             '''Can add some limniters here'''
             if(quad_type == 'Gauss'):
@@ -335,8 +357,12 @@ if __name__ == "__main__":
             
             '''Time integration RK2nd 2nd step'''
             u = RK2.RK2nd_2nd_step(u,u_old,un,primitive_variable,Stiff,flux,basis_val_flux_points,dt,inverse_M,element_trans)
-            primitive_variable_2nd = compute_primitive(u)
-            cons_v_cell_average, prim_v_cell_average = compute_cell_average(u,primitive_variable_2nd,xq_weights,element_trans,dx)
+            primitive_variable = compute_primitive(u)
+            # u_lobatto, p_lobatto = interpolation.compute_lobatto_point_values(u, primitive_variable, basis_val_lobatto_points, num_element, flux_number, Np)
+            # u_lobatto[:,0,:] = u_flux[:,0,:]
+            # u_lobatto[:,-1,:] = u_flux[:,-1,:]
+            # cons_v_cell_average, prim_v_cell_average = compute_cell_average(u_lobatto,p_lobatto,x_lobatto_weights,element_trans,dx)
+            cons_v_cell_average, prim_v_cell_average = compute_cell_average(u,primitive_variable,xq_weights,element_trans,dx)
             if(limiter_type == 'PP'):
                 # Check for negative density or pressure and restart with smaller dt if needed
                 if (cons_v_cell_average[:,0] < 0).any() or (prim_v_cell_average[:,2] < 0).any():
@@ -395,44 +421,44 @@ if __name__ == "__main__":
 
         
 
-    x_coord = x_element.flatten()
-    u_coord = u[:,:,0].flatten()
-    p_coord = primitive_variable[:,:,2].flatten()
-    velo_coord = primitive_variable[:,:,1].flatten()
+        x_coord = x_element.flatten()
+        u_coord = u[:,:,0].flatten()
+        p_coord = primitive_variable[:,:,2].flatten()
+        velo_coord = primitive_variable[:,:,1].flatten()
 
-    # x_coord = x_flux_coord.flatten()
-    # u_coord = p_from_u_flux[:,:,2].flatten()
+        # x_coord = x_flux_coord.flatten()
+        # u_coord = p_from_u_flux[:,:,2].flatten()
 
-    x_cell_average = np.linspace(x_min,x_max,num_element)
+        x_cell_average = np.linspace(x_min,x_max,num_element)
 
-    u_ini_coord = u_ini[:,:,0].flatten()
-    
+        u_ini_coord = u_ini[:,:,0].flatten()
+        
 
-    plt.figure(figsize=(8, 6))
-    # plt.plot(x_coord, u_coord, linestyle='-', color='k', label='Density')
-    # plt.plot(x_coord, p_coord, linestyle='-', color='r', label='Pressure')
-    # plt.plot(x_coord, velo_coord, linestyle='-', color='g', label='Velocity')
-    # plt.plot(x_cell_average,limiter_val1,linestyle='-', color='b', label='Limiter 1')
-    # plt.plot(x_cell_average,limiter_val2,linestyle='-', color='r', label='Limiter 2')
-    
-    plt.plot(x_cell_average, prim_v_cell_average[:,0],linestyle='-', color='b', label='Cell average density')
-    # plt.plot(x_cell_average, prim_v_cell_average[:,1],linestyle='-', color='g', label='Cell average velocity')
-    # plt.plot(x_cell_average, prim_v_cell_average[:,2],linestyle='-', color='r', label='Cell average pressure')
-    # plt.plot(x_coord, u_ini_coord, marker='o', linestyle='-', color='r', label='initial')
-    if (initial == 'shu-osher'):
-        plt.xlim(x_min,x_max)
-        plt.ylim(0,5.0)
-    else:
-        plt.xlim(x_min,x_max)
-        plt.ylim(0.1,1.1)
-    plt.xlabel('x')
-    plt.ylabel('Primitive variables')
-    plt.title('cells = '+str(jmax-1)+', p'+str(approx_order)+', flux = '+flux_type+', limiter = '+limiter_type + ', CFL = '+str(CFL)+', quad = '+quad_type)
-    plt.legend()
-    plt.grid(True)
-    plt.savefig('./data/'+str(initial)+'_'+str(flux_type)+'_'+str(limiter_type)+'_p'+str(approx_order)+'_'+str(quad_type)+'.png')
-    
-    plt.show()
+        plt.figure(figsize=(8, 6))
+        # plt.plot(x_coord, u_coord, linestyle='-', color='k', label='Density')
+        # plt.plot(x_coord, p_coord, linestyle='-', color='r', label='Pressure')
+        # plt.plot(x_coord, velo_coord, linestyle='-', color='g', label='Velocity')
+        # plt.plot(x_cell_average,limiter_val1,linestyle='-', color='b', label='Limiter 1')
+        # plt.plot(x_cell_average,limiter_val2,linestyle='-', color='r', label='Limiter 2')
+        
+        plt.plot(x_cell_average, prim_v_cell_average[:,0],linestyle='-', color='b', label='Cell average density')
+        plt.plot(x_cell_average, prim_v_cell_average[:,1],linestyle='-', color='g', label='Cell average velocity')
+        plt.plot(x_cell_average, prim_v_cell_average[:,2],linestyle='-', color='r', label='Cell average pressure')
+        # plt.plot(x_coord, u_ini_coord, marker='o', linestyle='-', color='r', label='initial')
+        if (initial == 'shu-osher'):
+            plt.xlim(x_min,x_max)
+            plt.ylim(0,5.0)
+        else:
+            plt.xlim(x_min,x_max)
+            # plt.ylim(0,1.1)
+        plt.xlabel('x')
+        plt.ylabel('Primitive variables')
+        plt.title('cells = '+str(jmax-1)+', p'+str(approx_order)+', flux = '+flux_type+', limiter = '+limiter_type + ', CFL = '+str(CFL)+', quad = '+quad_type)
+        plt.legend()
+        plt.grid(True)
+        plt.savefig('./data/'+str(initial)+'_'+str(flux_type)+'_'+str(limiter_type)+'_p'+str(approx_order)+'_'+str(quad_type)+'.png')
+        
+        plt.show()
 
 
 
