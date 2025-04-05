@@ -196,7 +196,7 @@ def compute_cell_average(u,primitive_variable,xq_weights,trans_matrix,dx):
     return cons_v_cell_average, prim_v_cell_average
 
 if __name__ == "__main__":
-    jmax = 101
+    jmax = 201
     time_step = 0
     num_element = jmax-1
     approx_order = 3
@@ -206,7 +206,7 @@ if __name__ == "__main__":
     quad_type = 'Gauss' # 'Gauss' or 'Lobatto'
     flux_type = 'Rusanov' # 'Rusanov' or 'HLLC'
     limiter_type = 'PP' # 'PP' or 'minmod'
-    initial = 'sod' # 'sod' or 'contact'
+    initial = 'shu-osher' # 'sod' or 'contact'
     # number of nodes in each element: At quad points
     Np = approx_order+1
     u = np.zeros((num_element,Np,3))
@@ -285,8 +285,13 @@ if __name__ == "__main__":
     # plotter.plot_cell_average(cons_v_cell_average,prim_v_cell_average,x_cell_average)
     flag_PP = False
 
+    if(initial == 'sod'):
+        end_time = 0.12
+    elif(initial == 'shu-osher'):
+        end_time = 2.0
+
     if(True):
-        while (time < 0.12):
+        while (time < end_time):
 
             un = u.copy()
             if(not flag_PP):
@@ -435,19 +440,19 @@ if __name__ == "__main__":
         
 
         plt.figure(figsize=(8, 6))
-        # plt.plot(x_coord, u_coord, linestyle='-', color='k', label='Density')
+        plt.plot(x_coord, u_coord, linestyle='-', color='k', label='Density')
         # plt.plot(x_coord, p_coord, linestyle='-', color='r', label='Pressure')
         # plt.plot(x_coord, velo_coord, linestyle='-', color='g', label='Velocity')
         # plt.plot(x_cell_average,limiter_val1,linestyle='-', color='b', label='Limiter 1')
         # plt.plot(x_cell_average,limiter_val2,linestyle='-', color='r', label='Limiter 2')
         
-        plt.plot(x_cell_average, prim_v_cell_average[:,0],linestyle='-', color='b', label='Cell average density')
-        plt.plot(x_cell_average, prim_v_cell_average[:,1],linestyle='-', color='g', label='Cell average velocity')
-        plt.plot(x_cell_average, prim_v_cell_average[:,2],linestyle='-', color='r', label='Cell average pressure')
+        # plt.plot(x_cell_average, prim_v_cell_average[:,0],linestyle='-', color='b', label='Cell average density')
+        # plt.plot(x_cell_average, prim_v_cell_average[:,1],linestyle='-', color='g', label='Cell average velocity')
+        # plt.plot(x_cell_average, prim_v_cell_average[:,2],linestyle='-', color='r', label='Cell average pressure')
         # plt.plot(x_coord, u_ini_coord, marker='o', linestyle='-', color='r', label='initial')
         if (initial == 'shu-osher'):
             plt.xlim(x_min,x_max)
-            plt.ylim(0,5.0)
+            plt.ylim(0.2,5.0)
         else:
             plt.xlim(x_min,x_max)
             # plt.ylim(0,1.1)

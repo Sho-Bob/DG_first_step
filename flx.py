@@ -99,20 +99,20 @@ def Rusanov(u_flux,p_flux,p_from_u, jmax,time_step):
         fR = np.array(fR)
         flux[i,:] = 0.5*(fL[:]+fR[:] - 0.5*max((np.abs(u_flux[i-1,1,1]/u_flux[i-1,1,0])+aL),(np.abs(u_flux[i,0,1]/u_flux[i,0,0])+aR))*(u_flux[i,0,:]-u_flux[i-1,1,:]))
     
-    flux[0,:] = [u_flux[0,0,1],(u_flux[0,0,1]**2/u_flux[0,0,0]+p_from_u[0,0,2]),(u_flux[0,0,2]+p_from_u[0,0,2])*p_from_u[0,0,1]]
-    flux[nf-1,:] = [u_flux[nf-2,1,1],(u_flux[nf-2,1,1]**2/u_flux[nf-2,1,0]+p_from_u[nf-2,1,2]),(u_flux[nf-2,1,2]+p_from_u[nf-2,1,2])*p_from_u[nf-2,1,1]]
+    # flux[0,:] = [u_flux[0,0,1],(u_flux[0,0,1]**2/u_flux[0,0,0]+p_from_u[0,0,2]),(u_flux[0,0,2]+p_from_u[0,0,2])*p_from_u[0,0,1]]
+    # flux[nf-1,:] = [u_flux[nf-2,1,1],(u_flux[nf-2,1,1]**2/u_flux[nf-2,1,0]+p_from_u[nf-2,1,2]),(u_flux[nf-2,1,2]+p_from_u[nf-2,1,2])*p_from_u[nf-2,1,1]]
     #only shu-osher
-    # rho1, u1, p1 = 3.857143, 2.629369, 10.3333
-    # rhou1 = rho1*u1
-    # e1 = p1/(gamma-1.0)+0.5*rho1*u1**2
+    rho1, u1, p1 = 3.857143, 2.629369, 10.3333
+    rhou1 = rho1*u1
+    e1 = p1/(gamma-1.0)+0.5*rho1*u1**2
 
-    # rho2 = u_flux[nf-2,1,0]
-    # u2 = 0.0
-    # p2 = p_from_u[nf-2,1,2]
-    # e2 = p2/(gamma-1.0)+0.5*rho2*u2**2
-    # rhou2 = rho2*u2
-    # flux[0,:] = [rhou1, rhou1**2/rho1+p1, (e1+p1)*u1]
-    # flux[nf-1,:] = [rhou2, rhou2**2/rho2+p2, (e2+p2)*u2]
+    rho2 = u_flux[nf-2,1,0]
+    u2 = 0.0
+    p2 = p_from_u[nf-2,1,2]
+    e2 = p2/(gamma-1.0)+0.5*rho2*u2**2
+    rhou2 = rho2*u2
+    flux[0,:] = [rhou1, rhou1**2/rho1+p1, (e1+p1)*u1]
+    flux[nf-1,:] = [rhou2, rhou2**2/rho2+p2, (e2+p2)*u2]
     '''Periodic boundary condition'''
     # aL = sound[nf-2,1]
     # aR = sound[0,0]
